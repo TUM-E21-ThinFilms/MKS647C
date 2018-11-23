@@ -13,319 +13,203 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import List
-import re
+from mks647c.syntax import OptionalSyntax, FixedLengthToken, IntegerToken, ConstantToken, FloatToken, ConcatSyntax, \
+    OrSyntax, WhitespaceToken, UntilToken
 
 
-class Result(object):
-    def __init__(self, match, data):
-        self._match = False
-        self._data = None
+class GrammarChannelMessage:
+    KEY_OPT_WHITESPACE = 'Optional:whitespace'
+    KEY_OPT_PARAMETER_2 = 'Optional:p2'
+    KEY_OPT_PARAMETER_3 = 'Optional:p3'
+    KEY_OPT_ADDITIONAL_TERMINATOR = 'Optional:nl'
+    KEY_WHITESPACE = 'whitespace'
+    KEY_COMMAND = 'Command'
+    KEY_CHANNEL = 'Channel'
+    KEY_QUERY = 'Query'
+    KEY_WRITE = 'Write'
+    KEY_QUERY_WRITE = 'Query/Write'
+    KEY_PARAMETER_1 = 'Parameter1'
+    KEY_PARAMETER_2 = 'Parameter2'
+    KEY_PARAMETER_3 = 'Parameter3'
+    KEY_TERMINATOR = 'CarriageReturn'
+    KEY_ADDITIONAL_TERMINATOR = 'NewLine'
 
-    def is_match(self):
-        return self._match
+    KEY_SYNTAX = 'syntax'
 
-    def set_match(self, match: bool):
-        self._match = match
+    QUERY_TOKEN = 'R'
+
+    def __init__(self):
+        self._syntax = self._setup()
+
+    def _setup(self):
+        whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
+        cmd = FixedLengthToken(self.KEY_COMMAND, 2)
+        channel = IntegerToken(self.KEY_CHANNEL)
+        query = ConstantToken(self.KEY_QUERY, self.QUERY_TOKEN)
+        p1 = FloatToken(self.KEY_PARAMETER_1)
+        p2 = OptionalSyntax(self.KEY_OPT_PARAMETER_2, FloatToken(self.KEY_PARAMETER_2))
+        p3 = OptionalSyntax(self.KEY_OPT_PARAMETER_3, FloatToken(self.KEY_PARAMETER_3))
+        write = ConcatSyntax(self.KEY_WRITE, [p1, whitespace, p2, whitespace, p3])
+        query_write = OrSyntax(self.KEY_QUERY_WRITE, [query, write])
+        cr = ConstantToken(self.KEY_TERMINATOR, chr(0x0d))
+        nl = OptionalSyntax(self.KEY_OPT_ADDITIONAL_TERMINATOR,
+                            ConstantToken(self.KEY_ADDITIONAL_TERMINATOR, chr(0x0a)))
+
+        return ConcatSyntax(self.KEY_SYNTAX, [cmd, whitespace, channel, whitespace, query_write, cr, nl])
+
+    def get_syntax(self):
+        return self._syntax
+
+    def generate(self, data: 'DataChannelMessage'):
+        return self._syntax.generate(**data.get_data())
+
+
+class DataChannelMessage:
+    def __init__(self):
+        self._p1, self._p2, self._p3 = None, None, None
+        self._cmd, self._channel, self._query_write = None, None, None
 
     def get_data(self):
-        return self._data
+        return {
+            GrammarChannelMessage.KEY_CHANNEL: self._channel,
+            GrammarChannelMessage.KEY_COMMAND: self._cmd,
+            GrammarChannelMessage.KEY_QUERY_WRITE: self._query_write,
+            GrammarChannelMessage.KEY_OPT_WHITESPACE: True,
+            GrammarChannelMessage.KEY_OPT_ADDITIONAL_TERMINATOR: True,
 
-    def set_data(self, data):
-        self._data = data
+            GrammarChannelMessage.KEY_PARAMETER_1: self._p1,
+
+            GrammarChannelMessage.KEY_OPT_PARAMETER_2: self._p2 is None,
+            GrammarChannelMessage.KEY_PARAMETER_2: self._p2,
+
+            GrammarChannelMessage.KEY_OPT_PARAMETER_3: self._p3 is None,
+            GrammarChannelMessage.KEY_PARAMETER_3: self._p3,
+        }
+
+    def set_command(self, command: str):
+        if not len(command) == 2:
+            raise ArgumentInvalidError("Command must have a length of two")
+
+        self._cmd = command
+
+    def set_channel(self, channel: int):
+        if not (1 <= channel <= 8):
+            raise ArgumentInvalidError("Channel must be between 1 and 8")
+
+        self._channel = channel
+
+    def set_query(self):
+        self._query_write = {GrammarChannelMessage.KEY_QUERY: True}
+
+    def set_write(self):
+        self._query_write = {GrammarChannelMessage.KEY_WRITE: True}
+
+    def set_parameter_1(self, param):
+        self._p1 = param
+
+    def set_parameter_2(self, param):
+        self._p2 = param
+
+    def set_parameter_3(self, param):
+        self._p3 = param
+
+    def get_command(self):
+        return self._cmd
+
+    def get_channel(self):
+        return self._channel
+
+    def get_parameter_1(self):
+        return self._p1
+
+    def get_parameter_2(self):
+        return self._p2
+
+    def get_parameter_3(self):
+        return self._p3
 
 
-class IntermediateResult:
-    def __init__(self, data, length):
-        self._data = data
-        self._len = length
+class GrammarGeneralResponse:
+    KEY_SYNTAX = 'syntax'
+    KEY_VALUE = 'value'
+    KEY_VALUE_1 = 'v1'
+    KEY_VALUE_2 = 'v2'
 
-    def get_data(self):
-        return self._data
+    KEY_ERROR = 'error'
+    KEY_ERROR_TOKEN = 'error_token'
+    KEY_ERROR_CODE = 'ec'
+    KEY_TERMINATOR = 'crnl'
+    KEY_OPT_VALUE_2 = 'Optional:v2'
+    KEY_VALUE_OR_ERROR = 'Or:v_e'
+    KEY_OPT_WHITESPACE = 'Optional:whitespace'
+    KEY_OPT_VALUE_ERROR = 'Optional:data'
+    KEY_WHITESPACE = 'whitespace'
 
-    def get_length(self):
-        return self._len
+    def __init__(self):
+        self._syntax = self._setup()
+
+    def _value_1_token(self):
+        raise NotImplementedError()
+
+    def _value_2_token(self):
+        return UntilToken(self.KEY_VALUE_2, chr(0x0d))
+
+    def _setup(self):
+        whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
+        error_token = ConstantToken(self.KEY_ERROR_TOKEN, 'E')
+        error_code = IntegerToken(self.KEY_ERROR_CODE)
+        error = ConcatSyntax(self.KEY_ERROR, [error_token, whitespace, error_code])
+        v1 = self._value_1_token()
+        v2 = OptionalSyntax(self.KEY_OPT_VALUE_2, self._value_2_token())
+        value = ConcatSyntax(self.KEY_VALUE, [v1, v2])
+        value_error = OrSyntax(self.KEY_VALUE_OR_ERROR, [value, error])
+        terminal = ConstantToken(self.KEY_TERMINATOR, "" + chr(0x0d) + chr(0x0a))
+        return ConcatSyntax(self.KEY_SYNTAX, [OptionalSyntax(self.KEY_OPT_VALUE_ERROR, value_error), terminal])
 
 
-class Syntax(object):
-    def __init__(self, name):
-        self._name = name
+class DataGeneralResponse:
+    def __init__(self, data):
+        self._read(data)
 
-    def get_name(self):
-        return self._name
+    def _read(self, data):
+        self._has_data = data[GrammarGeneralResponse.KEY_OPT_VALUE_ERROR]
+        terminal = data[GrammarGeneralResponse.KEY_TERMINATOR]
 
-    def get_parameter(self, name, *args, **kwargs):
-        if kwargs is not None:
-            if self._name in kwargs:
-                return kwargs[self._name]
+        self._v1 = self._get(GrammarGeneralResponse.KEY_VALUE_1, data, None)
+        self._v2 = self._get(GrammarGeneralResponse.KEY_VALUE_2, data, None,
+                             exists=GrammarGeneralResponse.KEY_OPT_VALUE_2)
 
-        raise RuntimeError("No argument given for parameter: name = '" + self._name + "'")
+        self._has_error = self._get(GrammarGeneralResponse.KEY_ERROR_TOKEN, data, None) is not None
+        self._error_code = self._get(GrammarGeneralResponse.KEY_ERROR_CODE, data, None)
 
+        error_or_value = data[GrammarGeneralResponse.KEY_VALUE_OR_ERROR]
 
-class OptionalSyntax(Syntax):
-    def __init__(self, name, sub_syntax):
-        super(OptionalSyntax, self).__init__(name)
-        self._syn = sub_syntax
-
-    def parse(self, input):
-        try:
-            res = self._syn.parse(input)
-            return IntermediateResult({**res.get_data(), **{self._name: True}}, res.get_length())
-        except:
-            return IntermediateResult({self._name: False}, 0)
-
-    def generate(self, *args, **kwargs):
-        opt = self.get_parameter(self._name, *args, **kwargs)
-
-        if opt is True:
-            return self._syn.generate(*args, **kwargs)
+    def _get(self, key, data, default, exists=None):
+        if exists is None:
+            if key in data:
+                return data[key]
+            return default
         else:
-            return ""
+            if exists in data and key in data:
+                return data[key]
+            return default
 
+    def has_data(self):
+        return self._has_data
 
-class OrSyntax(Syntax):
-    def __init__(self, name, syntaxs: List[Syntax]):
-        super(OrSyntax, self).__init__(name)
-        self._or = syntaxs
+    def has_error(self):
+        return self._has_error
 
-    def parse(self, input):
-        for syn in self._or:
-            result = syn.parse(input)
-            if not result is None:
-                return IntermediateResult({**result.get_data(), **{self._name: syn.get_name()}}, result.get_length())
+    def get_error_code(self):
+        return self._error_code
 
-    def generate(self, *args, **kwargs):
-        data = self.get_parameter(self._name, *args, **kwargs)
-        ret = ""
-        for syn in self._or:
-            if syn.get_name() in data:
-                ret = ret + syn.generate(*args, **kwargs)
-        return ret
+    def get_value_1(self):
+        return self._v1
 
+    def get_value_2(self):
+        return self._v2
 
-class RepeatSyntax(Syntax):
-    def __init__(self, name, syntax):
-        super(RepeatSyntax, self).__init__(name)
-        self._syn = syntax
 
-    def parse(self, input):
-        data = {self._name: (0, [])}
-        i = 0
-        length = 0
-        while True:
-            try:
-                res = self._syn.parse(input)
-                data[self._name].append(res.get_data())
-                length = length + res.get_length()
-                input = input[res.get_length():]
-            except:
-                break
-            i = i + 1
-        data[self._name][0] = i
-        return IntermediateResult(data, length)
-
-    def generate(self):
-        raise NotImplementedError()
-
-
-class ConcatSyntax(Syntax):
-    def __init__(self, name, syntaxs: List[Syntax]):
-        super(ConcatSyntax, self).__init__(name)
-        self._syn = syntaxs
-
-    def parse(self, input):
-        length = 0
-        data = {}
-
-        for syn in self._syn:
-            res = syn.parse(input)
-            if res is None:
-                return None
-            data = {**data, **res.get_data()}
-            length = length + res.get_length()
-            input = input[res.get_length():]
-
-        return IntermediateResult(data, length)
-
-    def generate(self, *args, **kwargs):
-        ret = ""
-        for syn in self._syn:
-            ret = ret + syn.generate(*args, **kwargs)
-        return ret
-
-
-class Token(Syntax):
-    def __init__(self, name):
-        super(Token, self).__init__(name)
-
-    def parse(self, input):
-        return NotImplementedError()
-
-    def generate(self, *args, **kwargs):
-        raise NotImplementedError()
-
-class UntilStringToken(Token):
-    def __init__(self, name, separator):
-        super(UntilStringToken, self).__init__(name)
-        if not isinstance(separator, str):
-            raise RuntimeError("Separator must be a string")
-        self._sep = separator
-
-    def parse(self, input):
-        try:
-            pos = input.index(self._sep)
-            return IntermediateResult({self._name: input[:pos]}, pos + len(self._sep))
-        except ValueError:
-            return None
-
-    def generate(self, *args, **kwargs):
-        return self.get_parameter(self._name, *args, **kwargs) + self._sep
-
-
-class UntilToken(Token):
-    def __init__(self, name, terminator):
-        super(UntilToken, self).__init__(name)
-        if not len(terminator) == 1:
-            raise RuntimeError("terminator has to be of length 1")
-        self._term = terminator
-
-    def parse(self, input):
-        for key, value in enumerate(input):
-            if value == self._term:
-                return IntermediateResult({self._name: input[:key]}, key + 1)
-
-        return None
-
-    def generate(self, *args, **kwargs):
-        return self.get_parameter(self._name, *args, **kwargs) + self._term
-
-
-class FixedLengthToken(Token):
-    def __init__(self, name, length):
-        super(FixedLengthToken, self).__init__(name)
-        self._len = int(length)
-
-    def parse(self, input):
-        if len(input) >= self._len:
-            return IntermediateResult({self._name: input[:self._len]}, self._len)
-
-        return None
-
-    def generate(self, *args, **kwargs):
-        tk = self.get_parameter(self._name, *args, **kwargs)
-        if not len(tk) == self._len:
-            raise RuntimeError("parameter name = '" + self._name + "' must be of length 2")
-
-        return tk
-
-
-class RegexToken(Token):
-    def __init__(self, name, regex, modifiers=0):
-        super(RegexToken, self).__init__(name)
-        self._regex = regex
-        self._modifiers = modifiers
-
-    def parse(self, input):
-        m = re.search(self._regex, input, self._modifiers)
-
-        if m is None:
-            return None
-
-        return IntermediateResult({self._name: m.groups()}, m.end())
-
-    def _validate(self, tk):
-        m = re.search(self._regex, tk)
-
-        if m is None:
-            raise RuntimeError("Given parameter with name = '" + self._name + "' does not match the regular expression")
-
-    def generate(self, *args, **kwargs):
-        tk = str(self.get_parameter(self._name, *args, **kwargs))
-        self._validate(tk)
-        return tk
-
-
-class IntegerToken(RegexToken):
-    def __init__(self, name):
-        super(IntegerToken, self).__init__(name, r'\A([-]?\d+)')
-
-    def parse(self, input):
-        result = super(IntegerToken, self).parse(input)
-        if result is None:
-            return None
-        return IntermediateResult({self._name: int(result.get_data()[self._name][0])}, result.get_length())
-
-
-class FloatToken(RegexToken):
-    def __init__(self, name):
-        super(FloatToken, self).__init__(name, r'\A([-+]?(\d+([.,]\d*)?|[.,]\d+)([eE][-+]?\d+)?)')
-
-    def parse(self, input):
-        m = re.search(self._regex, input)
-
-        if m is None:
-            return None
-
-        return IntermediateResult({self._name: float(m.group(1).replace(',', '.'))}, m.end())
-
-
-class ConstantToken(RegexToken):
-    def __init__(self, name, expect, case_sensitive=False):
-        mod = re.IGNORECASE
-        if case_sensitive is False:
-            mod = 0
-
-        super(ConstantToken, self).__init__(name, r"\A(" + re.escape(expect) + ")", mod)
-        self._exp = expect
-
-    def parse(self, input):
-        result = super(ConstantToken, self).parse(input)
-
-        if result is None:
-            return None
-
-        return IntermediateResult({self._name: result.get_data()[self._name][0]}, result.get_length())
-
-class WhitespaceToken(RegexToken):
-    def __init__(self, name):
-        super(WhitespaceToken, self).__init__(name, r"\A(\s+)")
-
-    def parse(self, input):
-        result = super(WhitespaceToken, self).parse(input)
-        if result is None:
-            return None
-        return IntermediateResult({self._name: result.get_data()[self._name][0]}, result.get_length())
-
-class WordToken(RegexToken):
-    def __init__(self, name):
-        super(WordToken, self).__init__(name, r"\A(\w+)")
-
-    def parse(self, input):
-        result = super(WordToken, self).parse(input)
-
-        if result is None:
-            return None
-
-        return IntermediateResult({self._name: result.get_data()[self._name][0]}, result.get_length())
-
-
-whitespace = OptionalSyntax("Optional:whitespace", WhitespaceToken("whitespace"))
-cmd = FixedLengthToken("Command", 2)
-channel = IntegerToken("Channel")
-query = ConstantToken("Query", "R")
-p1 = FloatToken("Parameter1")
-p2 = OptionalSyntax("Optional:p2", FloatToken("Parameter2"))
-p3 = OptionalSyntax("Optional:p3", FloatToken("Parameter3"))
-write = ConcatSyntax("Write", [p1, whitespace, p2, whitespace, p3])
-query_write = OrSyntax("Query/Write", [query, write])
-cr = ConstantToken("CarriageReturn", chr(0x0d))
-nl = OptionalSyntax("Optional:nl", ConstantToken("NewLine", chr(0x0a)))
-
-message_syntax = ConcatSyntax("message", [cmd, whitespace, channel, whitespace, query_write, cr, nl])
-
-data = message_syntax.parse("GM 2 R" + chr(0x0d) + chr(0x0a))
-print(message_syntax.generate(**data.get_data()))
-
-class ASCIIMessage(object):
-    def __init__(self, generator, terminator="\r\n"):
-        self._gen = generator
+class GrammarIntegerResponse(GrammarGeneralResponse):
+    def _value_1_token(self):
+        return IntegerToken(self.KEY_VALUE_1)
