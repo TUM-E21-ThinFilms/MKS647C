@@ -16,7 +16,7 @@
 from mks647c.protocol import MKS647CProtocol
 from mks647c.driver import MKS647CDriver
 from e21_util.pvd.transport import Serial
-from e21_util.log import get_sputter_logger
+from e21_util.pvd.log import get_sputter_logger
 from e21_util.pvd.ports import Ports
 
 
