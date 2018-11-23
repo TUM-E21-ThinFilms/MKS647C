@@ -16,13 +16,13 @@
 from mks647c.protocol import MKS647CProtocol
 from mks647c.driver import MKS647CDriver
 from e21_util.pvd.transport import Serial
-from e21_util.pvd.log import get_sputter_logger
+from e21_util.pvd.log import get_pvd_logger
 from e21_util.pvd.ports import Ports
 
 
 class MKS647CFactory:
     def get_logger(self):
-        return get_sputter_logger('MKS 647C Mass flow controller', 'mks647c.log')
+        return get_pvd_logger('MKS 647C Mass flow controller', 'mks647c.log')
 
     def create_device(self, device=None, logger=None):
         if logger is None:
