@@ -27,10 +27,6 @@ class MKS647CDriver:
 
         self._protocol = protocol
 
-        self.thread = None
-
-        super(MKS647CDriver, self).__init__(transport, protocol)
-
     def test(self):
         self._transport.write("GM 0 " + chr(0x0d) + chr(0x0a))
 
