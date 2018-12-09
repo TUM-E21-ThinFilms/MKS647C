@@ -106,6 +106,7 @@ class DataChannelMessage:
             GrammarChannelMessage.KEY_COMMAND: self._cmd,
             GrammarChannelMessage.KEY_QUERY_WRITE: self._query_write,
             GrammarChannelMessage.KEY_OPT_WHITESPACE: True,
+            GrammarChannelMessage.KEY_WHITESPACE: " ",
             GrammarChannelMessage.KEY_OPT_ADDITIONAL_TERMINATOR: True,
 
             GrammarChannelMessage.KEY_PARAMETER_1: self._p1,
