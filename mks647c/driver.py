@@ -108,7 +108,7 @@ class MKS647CDriver:
         self.syntax_write(syntax)
 
     def get_setpoint(self, channel):
-        self._check(channel=channel, setpoint=setpoint)
+        self._check(channel=channel)
         syntax = self.build_channel_grammar("FS", channel, is_query=True)
         return self.syntax_query(syntax)
 
