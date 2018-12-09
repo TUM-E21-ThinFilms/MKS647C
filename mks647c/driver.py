@@ -63,8 +63,11 @@ class MKS647CDriver:
         grammar.set_data(data)
         return grammar.generate()
 
-    def syntaxes_write(self, syntaxes):
-        self._protocol.write(self._transport, syntaxes)
+    def syntax_write(self, syntax):
+        self._protocol.write(self._transport, syntax)
+
+    def syntax_query(self, syntax):
+        self._protocol.query(self._transport, syntax)
 
     def channel_error(self, channel):
         raise RuntimeError("Given channel {0:s} invalid. Must be {1:d}..{2:d}.".format(channel, self.CHANNEL_MIN, self.CHANNEL_MAX))
@@ -91,7 +94,7 @@ class MKS647CDriver:
         cmd = "GM"
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=False)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             raise RuntimeError("Given gas menu invalid. Must be 1..5.")
 
@@ -99,7 +102,7 @@ class MKS647CDriver:
         cmd = "GM"
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             pass
         # Todo: exception?
@@ -108,16 +111,16 @@ class MKS647CDriver:
     def set_setpoint_channel(self, channel, setpoint):
         cmd = "FS"
         try:
-            syntaxes = self.build_channel_grammar(cmd, channel, p1=setpoint, is_query=False)
-            self.syntaxes_write(syntaxes)
+            syntax = self.build_channel_grammar(cmd, channel, p1=setpoint, is_query=False)
+            self.syntax_write(syntax)
         except:
             self.error_check(channel=channel, setpoint=setpoint)
 
     def get_setpoint_channel(self, channel):
         cmd = "FS"
         try:
-            syntaxes = self.build_channel_grammar(cmd, channel, is_query=True)
-            self.syntaxes_write(syntaxes)
+            syntax = self.build_channel_grammar(cmd, channel, is_query=True)
+            return self.syntax_query(syntax)
         except:
             self.error_check(channel)
 
@@ -126,7 +129,7 @@ class MKS647CDriver:
         cmd = "FL"
         try:
             syntaxes = self.build_channel_grammar(cmd, channel, is_query=True)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             self.error_check(channel)
 
@@ -134,7 +137,7 @@ class MKS647CDriver:
         cmd = "PS"
         try:
             syntaxes = self.build_channel_grammar(cmd, p1=setpoint, is_query=False)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             self.error_check(setpoint)
 
@@ -142,7 +145,7 @@ class MKS647CDriver:
         cmd = "PS"
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             pass
         # Todo: exception?
@@ -152,7 +155,7 @@ class MKS647CDriver:
         cmd = "PR"
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             pass
         # Todo: exception?
@@ -162,7 +165,7 @@ class MKS647CDriver:
         cmd = "PC"
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntaxes_write(syntaxes)
+            self.syntax_write(syntaxes)
         except:
             pass
         # Todo: exception?
@@ -172,7 +175,7 @@ class MKS647CDriver:
         if mode in (0, 1):
             try:
                 syntaxes = self.build_channel_grammar(cmd, p1=mode, is_query=False)
-                self.syntaxes_write(syntaxes)
+                self.syntax_write(syntaxes)
             except:
                 pass
             # Todo: exception?
