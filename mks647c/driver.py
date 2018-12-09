@@ -79,7 +79,7 @@ class MKS647CDriver:
 
         if setpoint is not None:
             if setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
-                raise RuntimeError("Given setpoint %s invalid." % str(setpoint)))
+                raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
 
         # if query is not None:
         #     self.query_error(query)
