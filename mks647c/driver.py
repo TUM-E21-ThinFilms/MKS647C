@@ -61,7 +61,7 @@ class MKS647CDriver:
             data.set_parameter_3(p3)
 
         grammar.set_data(data)
-        return grammar.generate()
+        return grammar
 
     def syntax_write(self, syntax):
         self._protocol.write(self._transport, syntax)
@@ -108,7 +108,7 @@ class MKS647CDriver:
         # Todo: exception?
 
 
-    def set_setpoint_channel(self, channel, setpoint):
+    def set_setpoint(self, channel, setpoint):
         cmd = "FS"
         try:
             syntax = self.build_channel_grammar(cmd, channel, p1=setpoint, is_query=False)
@@ -116,7 +116,7 @@ class MKS647CDriver:
         except:
             self.error_check(channel=channel, setpoint=setpoint)
 
-    def get_setpoint_channel(self, channel):
+    def get_setpoint(self, channel):
         cmd = "FS"
         try:
             syntax = self.build_channel_grammar(cmd, channel, is_query=True)

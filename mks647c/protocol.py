@@ -60,9 +60,8 @@ class MKS647CProtocol:
         with InterProcessTransportLock(transport):
             raw_str_msg = self.create_message(msg)
             self._logger.debug('Query: %s', repr(raw_str_msg))
-            with transport:
-                transport.write(raw_str_msg)
-                response = transport.read_until(GrammarChannelMessage.TOKEN_NL)
+            transport.write(raw_str_msg)
+            response = transport.read_until(GrammarChannelMessage.TOKEN_NL)
             self._logger.debug('Response: %s', repr(response))
             return self.parse_response(response)
 
@@ -70,6 +69,5 @@ class MKS647CProtocol:
         with InterProcessTransportLock(transport):
             raw_str_msg = self.create_message(msg)
             self._logger.debug('Write: %s', repr(raw_str_msg))
-            with transport:
-                transport.write(raw_str_msg)
+            transport.write(raw_str_msg)
                 # TODO: do we get a response from the device?
