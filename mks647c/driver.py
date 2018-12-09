@@ -69,23 +69,17 @@ class MKS647CDriver:
     def syntax_query(self, syntax):
         self._protocol.query(self._transport, syntax)
 
-    def channel_error(self, channel):
-        raise RuntimeError("Given channel %s invalid." % str(channel))
-
-    def setpoint_error(self, setpoint):
-        raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
-
     # def query_error(self, query):
     #     raise RuntimeError("Invalid query. {:s} not set yet.".format(query))
 
-    def error_check(self, channel=None, setpoint=None, query=None):
+    def _check(self, channel=None, setpoint=None, query=None):
         if channel is not None:
             if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                self.channel_error(channel)
+                raise RuntimeError("Given channel %s invalid." % str(channel))
 
         if setpoint is not None:
             if setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
-                self.setpoint_error(setpoint)
+                raise RuntimeError("Given setpoint %s invalid." % str(setpoint)))
 
         # if query is not None:
         #     self.query_error(query)
@@ -109,20 +103,14 @@ class MKS647CDriver:
 
 
     def set_setpoint(self, channel, setpoint):
-        cmd = "FS"
-        try:
-            syntax = self.build_channel_grammar(cmd, channel, p1=setpoint, is_query=False)
-            self.syntax_write(syntax)
-        except:
-            self.error_check(channel=channel, setpoint=setpoint)
+        self._check(channel=channel, setpoint=setpoint)
+        syntax = self.build_channel_grammar("FS", channel, p1=setpoint, is_query=False)
+        self.syntax_write(syntax)
 
     def get_setpoint(self, channel):
-        cmd = "FS"
-        try:
-            syntax = self.build_channel_grammar(cmd, channel, is_query=True)
-            return self.syntax_query(syntax)
-        except:
-            self.error_check(channel)
+        self._check(channel=channel, setpoint=setpoint)
+        syntax = self.build_channel_grammar("FS", channel, is_query=True)
+        return self.syntax_query(syntax)
 
     def get_flow(self, channel):
         # TODO: to check if is_query should be True or False
