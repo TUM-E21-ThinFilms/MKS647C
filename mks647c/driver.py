@@ -70,10 +70,10 @@ class MKS647CDriver:
         self._protocol.query(self._transport, syntax)
 
     def channel_error(self, channel):
-        raise RuntimeError("Given channel {0:s} invalid. Must be {1:d}..{2:d}.".format(channel, self.CHANNEL_MIN, self.CHANNEL_MAX))
+        raise RuntimeError("Given channel %s invalid." % str(channel))
 
     def setpoint_error(self, setpoint):
-        raise RuntimeError("Given setpoint {0:s} invalid. Must be {1:d}..{2:d}.".format(setpoint, self.SETPOINT_MIN, self.SETPOINT_MAX))
+        raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
 
     # def query_error(self, query):
     #     raise RuntimeError("Invalid query. {:s} not set yet.".format(query))
