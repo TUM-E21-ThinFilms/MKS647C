@@ -17,7 +17,11 @@ import logging
 
 import e21_util
 from e21_util.lock import InterProcessTransportLock
+from mks647c.message import AbstractMessage, GrammarChannelMessage, GrammarGeneralResponse
+from mks647c.message import GrammarChannelMessage
 
+class ResponseError(RuntimeError):
+    pass
 
 class MKS647CProtocol:
     def __init__(self, logger=None):
@@ -29,30 +33,43 @@ class MKS647CProtocol:
         self._logger = logger
 
     def clear(self, transport):
-        with InterProcessTransportLock(transport):
+        with InterProcessTransportLock(transport): # lock and then unlock afterwards
             try:
                 while True:
-                    transport.read_bytes(5)
+                    transport.read_bytes(10)
             except: # TODO: catch not all exceptions
                 return
+
+    def create_message(self, msg: AbstractMessage):
+        syntax = msg.get_syntax()
+        raw_msg = syntax.generate()
+        return raw_msg
 
     def set_logger(self, logger):
         self._logger = logger
 
-    def query(self, transport, header, *data):
-        with InterProcessTransportLock(transport):
-            message = self.create_message(header, *data)
-            self.logger.debug('Query: %s', repr(message))
-            with transport:
-                transport.write(message)
-                response = transport.read_until(self.terminal.encode(self.encoding))
-            self._logger.debug('Response: %s', repr(response))
-            return self.parse_response(response, header)
+    def parse_response(self, raw_response):
+        try:
+            return GrammarGeneralResponse().parse(raw_response)
+        except:
+            # TODO: do not catch all exceptions, only exceptions from parsing.
+            # to Ran: figure out which exceptions those are.
+            raise ResponseError("Could not parse message")
 
-    def write(self, transport, header, *data):
-        """with InterProcessTransportLock(transport):
-            message = self.create_message(header, *data)
-            self._logger.debug('Write: %s', repr(message))
+    def query(self, transport, msg: AbstractMessage):
+        with InterProcessTransportLock(transport):
+            raw_str_msg = self.create_message(msg)
+            self._logger.debug('Query: %s', repr(raw_str_msg))
             with transport:
-                transport.write(message)
-        """
+                transport.write(raw_str_msg)
+                response = transport.read_until(GrammarChannelMessage.TOKEN_NL)
+            self._logger.debug('Response: %s', repr(response))
+            return self.parse_response(response)
+
+    def write(self, transport, msg:AbstractMessage):
+        with InterProcessTransportLock(transport):
+            raw_str_msg = self.create_message(msg)
+            self._logger.debug('Write: %s', repr(raw_str_msg))
+            with transport:
+                transport.write(raw_str_msg)
+                # TODO: do we get a response from the device?

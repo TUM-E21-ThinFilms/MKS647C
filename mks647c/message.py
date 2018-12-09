@@ -1,3 +1,4 @@
+# coding=utf-8
 # Copyright (C) 2018, see AUTHORS.md
 #
 # This program is free software: you can redistribute it and/or modify
@@ -14,10 +15,22 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from mks647c.syntax import OptionalSyntax, FixedLengthToken, IntegerToken, ConstantToken, FloatToken, ConcatSyntax, \
-    OrSyntax, WhitespaceToken, UntilToken
+    OrSyntax, WhitespaceToken, UntilToken, ArgumentInvalidError
 
 
-class GrammarChannelMessage:
+class AbstractMessage(object):
+
+
+    TOKEN_NL = chr(0x0a)
+    TOKEN_CR = chr(0x0d)
+    TOKEN_ERROR = 'E'
+    TOKEN_QUERY = 'R'  # R = request of the parameters
+
+    def get_syntax(self):
+        raise NotImplementedError()
+
+
+class GrammarChannelMessage(AbstractMessage):
     KEY_OPT_WHITESPACE = 'Optional:whitespace'
     KEY_OPT_PARAMETER_2 = 'Optional:p2'
     KEY_OPT_PARAMETER_3 = 'Optional:p3'
@@ -36,32 +49,45 @@ class GrammarChannelMessage:
 
     KEY_SYNTAX = 'syntax'
 
-    QUERY_TOKEN = 'R'
 
     def __init__(self):
         self._syntax = self._setup()
+        self._data = None
 
     def _setup(self):
+        """
+        Die Syntaxen werden hier als Objekte bezeichnet
+        :return:
+        """
         whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
         cmd = FixedLengthToken(self.KEY_COMMAND, 2)
         channel = IntegerToken(self.KEY_CHANNEL)
-        query = ConstantToken(self.KEY_QUERY, self.QUERY_TOKEN)
+        query = ConstantToken(self.KEY_QUERY, self.TOKEN_QUERY)
         p1 = FloatToken(self.KEY_PARAMETER_1)
         p2 = OptionalSyntax(self.KEY_OPT_PARAMETER_2, FloatToken(self.KEY_PARAMETER_2))
         p3 = OptionalSyntax(self.KEY_OPT_PARAMETER_3, FloatToken(self.KEY_PARAMETER_3))
         write = ConcatSyntax(self.KEY_WRITE, [p1, whitespace, p2, whitespace, p3])
         query_write = OrSyntax(self.KEY_QUERY_WRITE, [query, write])
-        cr = ConstantToken(self.KEY_TERMINATOR, chr(0x0d))
+        cr = ConstantToken(self.KEY_TERMINATOR, self.TOKEN_CR)
         nl = OptionalSyntax(self.KEY_OPT_ADDITIONAL_TERMINATOR,
-                            ConstantToken(self.KEY_ADDITIONAL_TERMINATOR, chr(0x0a)))
+                            ConstantToken(self.KEY_ADDITIONAL_TERMINATOR, self.TOKEN_NL))
 
         return ConcatSyntax(self.KEY_SYNTAX, [cmd, whitespace, channel, whitespace, query_write, cr, nl])
 
     def get_syntax(self):
         return self._syntax
 
-    def generate(self, data: 'DataChannelMessage'):
+    def generate_from_data(self, data: 'DataChannelMessage'):
         return self._syntax.generate(**data.get_data())
+
+    def set_data(self, data: 'DataChannelMessage'):
+        self._data = data
+
+    def generate(self):
+        if self._data is None:
+            raise RuntimeError("No data set before.")
+
+        return self._syntax.generate(**self._data.get_data())
 
 
 class DataChannelMessage:
@@ -70,6 +96,11 @@ class DataChannelMessage:
         self._cmd, self._channel, self._query_write = None, None, None
 
     def get_data(self):
+        """
+        gibt die Daten in der Dictionary-Form Schlüsseln: Werte zurück
+        für die Mathode generate in der Klasse GrammarChannelMessage z.B.
+        :return:
+        """
         return {
             GrammarChannelMessage.KEY_CHANNEL: self._channel,
             GrammarChannelMessage.KEY_COMMAND: self._cmd,
@@ -129,7 +160,7 @@ class DataChannelMessage:
         return self._p3
 
 
-class GrammarGeneralResponse:
+class GrammarGeneralResponse(AbstractMessage):
     KEY_SYNTAX = 'syntax'
     KEY_VALUE = 'value'
     KEY_VALUE_1 = 'v1'
@@ -152,20 +183,22 @@ class GrammarGeneralResponse:
         raise NotImplementedError()
 
     def _value_2_token(self):
-        return UntilToken(self.KEY_VALUE_2, chr(0x0d))
+        return UntilToken(self.KEY_VALUE_2, self.TOKEN_CR)
 
     def _setup(self):
         whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
-        error_token = ConstantToken(self.KEY_ERROR_TOKEN, 'E')
+        error_token = ConstantToken(self.KEY_ERROR_TOKEN, self.TOKEN_ERROR)
         error_code = IntegerToken(self.KEY_ERROR_CODE)
         error = ConcatSyntax(self.KEY_ERROR, [error_token, whitespace, error_code])
         v1 = self._value_1_token()
         v2 = OptionalSyntax(self.KEY_OPT_VALUE_2, self._value_2_token())
         value = ConcatSyntax(self.KEY_VALUE, [v1, v2])
         value_error = OrSyntax(self.KEY_VALUE_OR_ERROR, [value, error])
-        terminal = ConstantToken(self.KEY_TERMINATOR, "" + chr(0x0d) + chr(0x0a))
+        terminal = ConstantToken(self.KEY_TERMINATOR, self.TOKEN_CR + self.TOKEN_NL)
         return ConcatSyntax(self.KEY_SYNTAX, [OptionalSyntax(self.KEY_OPT_VALUE_ERROR, value_error), terminal])
 
+    def parse(self, data):
+        return self._syntax.parse(data)
 
 class DataGeneralResponse:
     def __init__(self, data):

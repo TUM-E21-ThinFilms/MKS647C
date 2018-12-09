@@ -12,6 +12,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from typing import List
 import re
 
@@ -96,6 +97,7 @@ class OptionalSyntax(Syntax):
         try:
             res = self._syn.parse(input)
             return IntermediateResult({**res.get_data(), **{self._name: True}}, res.get_length())
+                # form: name, length
         except:
             return IntermediateResult({self._name: False}, 0)
 
@@ -110,9 +112,9 @@ class OptionalSyntax(Syntax):
 
 
 class OrSyntax(Syntax):
-    def __init__(self, name, syntaxs: List[Syntax]):
+    def __init__(self, name, syntaxes: List[Syntax]):
         super(OrSyntax, self).__init__(name)
-        self._or = syntaxs
+        self._or = syntaxes
 
     def parse(self, input):
         for syn in self._or:
@@ -154,12 +156,16 @@ class RepeatSyntax(Syntax):
         raise NotImplementedError()
 
 
-class ConcatSyntax(Syntax):
-    def __init__(self, name, syntaxs: List[Syntax]):
+class ConcatSyntax(Syntax): # (wiki) concatenate: Computer instruction to join two strings together.
+    """
+    To generate the Syntaxes together
+    """
+    def __init__(self, name, syntaxes: List[Syntax]):
         super(ConcatSyntax, self).__init__(name)
-        self._syn = syntaxs
+        self._syn = syntaxes
 
     def parse(self, input):
+            # parse: To resolve (a string of code or text) into its elements to determine if it conforms to a particular grammar.
         length = 0
         data = {}
 
