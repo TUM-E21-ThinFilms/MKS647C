@@ -100,6 +100,8 @@ class MKS647CDriver:
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
             self.syntaxes_write(syntaxes)
+        except:
+            pass
         # Todo: exception?
 
 
