@@ -74,11 +74,11 @@ class MKS647CDriver:
 
     def _check(self, channel=None, setpoint=None, query=None):
         if channel is not None:
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
+            if not channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
                 raise RuntimeError("Given channel %s invalid." % str(channel))
 
         if setpoint is not None:
-            if setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
+            if not setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
                 raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
 
         # if query is not None:
