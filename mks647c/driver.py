@@ -143,6 +143,8 @@ class MKS647CDriver:
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
             self.syntaxes_write(syntaxes)
+        except:
+            pass
         # Todo: exception?
 
     def get_pressure(self):
@@ -151,6 +153,8 @@ class MKS647CDriver:
         try:
             syntaxes = self.build_channel_grammar(cmd, is_query=True)
             self.syntaxes_write(syntaxes)
+        except:
+            pass
         # Todo: exception?
 
     def get_pressure_control_signal(self):
@@ -167,19 +171,21 @@ class MKS647CDriver:
             try:
                 syntaxes = self.build_channel_grammar(cmd, p1=mode, is_query=False)
                 self.syntaxes_write(syntaxes)
+            except:
+                pass
             # Todo: exception?
         else:
             raise RuntimeError("Given pressure mode {} invalid".format(mode))
 
     def get_pressure_mode(self):
         cmd = "PM"
-            if query_write is "R":
-                return self.build_channel_grammar(cmd, is_query=True)
-            else:
-                self.query_check()
-        else:
-            self.cmd_check(cmd)
-
+        #    if query_write is "R":
+        #        return self.build_channel_grammar(cmd, is_query=True)
+        #    else:
+        #        self.query_check()
+        #else:
+        #    self.cmd_check(cmd)
+    """
     def range_set(self, channel, range_code):
         cmd = "RA":
             if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
@@ -378,3 +384,5 @@ class MKS647CDriver:
     def identification(self): # check for identification
         cmd = "ID"
         return self.build_channel_grammar(cmd)
+
+    """
