@@ -15,7 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from mks647c.syntax import OptionalSyntax, FixedLengthToken, IntegerToken, ConstantToken, FloatToken, ConcatSyntax, \
-    OrSyntax, WhitespaceToken, UntilToken, ArgumentInvalidError
+    OrSyntax, WhitespaceToken, UntilToken, ArgumentInvalidError, IntermediateResult
 
 
 class AbstractMessage(object):
@@ -218,6 +218,9 @@ class DataGeneralResponse:
         if data is None:
             self._has_error, self._has_data, self._error_code, self._v1, self._v2 = None, None, None, None, None
             return
+
+        if isinstance(data, IntermediateResult):
+            data = data.get_data()
 
         self._has_data = data[GrammarGeneralResponse.KEY_OPT_VALUE_ERROR]
         terminal = data[GrammarGeneralResponse.KEY_TERMINATOR]
