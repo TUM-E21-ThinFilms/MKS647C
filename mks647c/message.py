@@ -205,7 +205,7 @@ class GrammarGeneralResponse(AbstractMessage):
 
     def parse(self, data):
         self._data = self._syntax.parse(data)
-        return self._data
+        return self
 
     def get_data(self):
         return DataGeneralResponse(self._data)
