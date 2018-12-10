@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from mks647c.protocol import MKS647CProtocol
-from mks647c.message import GrammarChannelMessage, DataChannelMessage
+from mks647c.message import GrammarChannelMessage, DataChannelMessage, GrammarIntegerResponse
 
 from e21_util.pvd.transport import Serial
 
@@ -110,8 +110,7 @@ class MKS647CDriver:
     def get_setpoint(self, channel):
         self._check(channel=channel)
         syntax = self.build_channel_grammar("FS", channel, is_query=True)
-        print(syntax)
-        print(syntax._data.get_data())
+        syntax.set_response_class(GrammarIntegerResponse)
         return self.syntax_query(syntax)
 
     def get_flow(self, channel):

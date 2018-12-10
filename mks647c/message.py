@@ -19,14 +19,18 @@ from mks647c.syntax import OptionalSyntax, FixedLengthToken, IntegerToken, Const
 
 
 class AbstractMessage(object):
-
-
     TOKEN_NL = chr(0x0a)
     TOKEN_CR = chr(0x0d)
     TOKEN_ERROR = 'E'
     TOKEN_QUERY = 'R'  # R = request of the parameters
 
     def get_syntax(self):
+        raise NotImplementedError()
+
+    def generate(self):
+        raise NotImplementedError()
+
+    def get_response_class(self):
         raise NotImplementedError()
 
 
@@ -46,19 +50,14 @@ class GrammarChannelMessage(AbstractMessage):
     KEY_PARAMETER_3 = 'Parameter3'
     KEY_TERMINATOR = 'CarriageReturn'
     KEY_ADDITIONAL_TERMINATOR = 'NewLine'
-
     KEY_SYNTAX = 'syntax'
-
 
     def __init__(self):
         self._syntax = self._setup()
         self._data = None
+        self._response = GrammarGeneralResponse
 
     def _setup(self):
-        """
-        Die Syntaxen werden hier als Objekte bezeichnet
-        :return:
-        """
         whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
         cmd = FixedLengthToken(self.KEY_COMMAND, 2)
         channel = IntegerToken(self.KEY_CHANNEL)
@@ -87,6 +86,12 @@ class GrammarChannelMessage(AbstractMessage):
         if self._data is None:
             raise RuntimeError("No data set before.")
         return self._syntax.generate(**self._data.get_data())
+
+    def set_response_class(self, resp):
+        self._response = resp
+
+    def get_response_class(self):
+        return self._response
 
 
 class DataChannelMessage:
@@ -178,9 +183,10 @@ class GrammarGeneralResponse(AbstractMessage):
 
     def __init__(self):
         self._syntax = self._setup()
+        self._data = None
 
     def _value_1_token(self):
-        raise NotImplementedError()
+        return UntilToken(self.KEY_VALUE_1, self.TOKEN_CR)
 
     def _value_2_token(self):
         return UntilToken(self.KEY_VALUE_2, self.TOKEN_CR)
@@ -198,13 +204,21 @@ class GrammarGeneralResponse(AbstractMessage):
         return ConcatSyntax(self.KEY_SYNTAX, [OptionalSyntax(self.KEY_OPT_VALUE_ERROR, value_error), terminal])
 
     def parse(self, data):
-        return self._syntax.parse(data)
+        self._data = self._syntax.parse(data)
+        return self._data
+
+    def get_data(self):
+        return DataGeneralResponse(self._data)
 
 class DataGeneralResponse:
     def __init__(self, data):
         self._read(data)
 
     def _read(self, data):
+        if data is None:
+            self._has_error, self._has_data, self._error_code, self._v1, self._v2 = None, None, None, None, None
+            return
+
         self._has_data = data[GrammarGeneralResponse.KEY_OPT_VALUE_ERROR]
         terminal = data[GrammarGeneralResponse.KEY_TERMINATOR]
 
