@@ -257,7 +257,7 @@ class RegexToken(Token):
         m = re.search(self._regex, tk)
 
         if m is None:
-            raise RuntimeError("Given parameter with name = '" + self._name + "' does not match the regular expression")
+            raise RuntimeError("Given parameter ("+str(tk)+") with name = '" + self._name + "' does not match the regular expression")
 
     def generate(self, *args, **kwargs):
         tk = str(self.get_parameter(self._name, *args, **kwargs))
