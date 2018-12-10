@@ -60,7 +60,7 @@ class MKS647CProtocol:
     def read_response(self, transport, msg: AbstractMessage):
         response = transport.read_until(bytes(GrammarChannelMessage.TOKEN_NL, 'ascii'))
         self._logger.debug('Response: %s', repr(response))
-        return self.parse_response(response.decode('ascii'), msg.get_response_class())
+        return self.parse_response(response.decode('ascii') + "\n", msg.get_response_class())
 
     def query(self, transport, msg: AbstractMessage):
         with InterProcessTransportLock(transport):

@@ -168,7 +168,6 @@ class ConcatSyntax(Syntax):
             data = {**data, **res.get_data()}
             length = length + res.get_length()
             input = input[res.get_length():]
-
         return IntermediateResult(data, length)
 
     def generate(self, *args, **kwargs):
