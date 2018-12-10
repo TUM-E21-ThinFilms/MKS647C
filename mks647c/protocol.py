@@ -74,4 +74,5 @@ class MKS647CProtocol:
             raw_str_msg = self.create_message(msg)
             self._logger.debug('Write: %s', repr(raw_str_msg))
             transport.write(raw_str_msg)
+            return self.read_response(transport, msg)
             # TODO: do we get a response from the device?
