@@ -232,7 +232,7 @@ class DataGeneralResponse:
         self._has_error = self._get(GrammarGeneralResponse.KEY_ERROR_TOKEN, data, None) is not None
         self._error_code = self._get(GrammarGeneralResponse.KEY_ERROR_CODE, data, None)
 
-        error_or_value = data[GrammarGeneralResponse.KEY_VALUE_OR_ERROR]
+        #error_or_value = data[GrammarGeneralResponse.KEY_VALUE_OR_ERROR]
 
     def _get(self, key, data, default, exists=None):
         if exists is None:
