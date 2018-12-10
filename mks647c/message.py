@@ -115,10 +115,10 @@ class DataChannelMessage:
 
             GrammarChannelMessage.KEY_PARAMETER_1: self._p1,
 
-            GrammarChannelMessage.KEY_OPT_PARAMETER_2: self._p2 is None,
+            GrammarChannelMessage.KEY_OPT_PARAMETER_2: self._p2 is not None,
             GrammarChannelMessage.KEY_PARAMETER_2: self._p2,
 
-            GrammarChannelMessage.KEY_OPT_PARAMETER_3: self._p3 is None,
+            GrammarChannelMessage.KEY_OPT_PARAMETER_3: self._p3 is not None,
             GrammarChannelMessage.KEY_PARAMETER_3: self._p3,
         }
 
