@@ -41,8 +41,7 @@ class MKS647CProtocol:
                 return
 
     def create_message(self, msg: AbstractMessage):
-        syntax = msg.get_syntax()
-        raw_msg = syntax.generate()
+        raw_msg = msg.generate()
         return raw_msg
 
     def set_logger(self, logger):
@@ -61,7 +60,7 @@ class MKS647CProtocol:
             raw_str_msg = self.create_message(msg)
             self._logger.debug('Query: %s', repr(raw_str_msg))
             transport.write(raw_str_msg)
-            response = transport.read_until(GrammarChannelMessage.TOKEN_NL)
+            response = transport.read_until(bytes(GrammarChannelMessage.TOKEN_NL, 'ascii'))
             self._logger.debug('Response: %s', repr(response))
             return self.parse_response(response)
 

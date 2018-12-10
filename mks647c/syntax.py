@@ -74,7 +74,10 @@ class Syntax(object):
 
         if name in self._default:
             return self._default[name]
-
+        print("*args:")
+        print(*args)
+        print("**kwargs")
+        print(**kwargs)
         raise ArgumentNotSuppliedError("No argument given for parameter: name = '" + name + "'")
 
     def parse(self, input):

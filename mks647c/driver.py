@@ -110,6 +110,8 @@ class MKS647CDriver:
     def get_setpoint(self, channel):
         self._check(channel=channel)
         syntax = self.build_channel_grammar("FS", channel, is_query=True)
+        print(syntax)
+        print(syntax._data.get_data())
         return self.syntax_query(syntax)
 
     def get_flow(self, channel):

@@ -86,7 +86,6 @@ class GrammarChannelMessage(AbstractMessage):
     def generate(self):
         if self._data is None:
             raise RuntimeError("No data set before.")
-
         return self._syntax.generate(**self._data.get_data())
 
 
