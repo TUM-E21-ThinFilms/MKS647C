@@ -64,7 +64,7 @@ class MKS647CDriver:
         return grammar
 
     def syntax_write(self, syntax):
-        self._protocol.write(self._transport, syntax)
+        return self._protocol.write(self._transport, syntax)
 
     def syntax_query(self, syntax):
         return self._protocol.query(self._transport, syntax)

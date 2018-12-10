@@ -152,17 +152,12 @@ class RepeatSyntax(Syntax):
         raise NotImplementedError()
 
 
-class ConcatSyntax(Syntax):  # (wiki) concatenate: Computer instruction to join two strings together.
-    """
-    To generate the Syntaxes together
-    """
-
+class ConcatSyntax(Syntax):
     def __init__(self, name, syntaxes: List[Syntax]):
         super(ConcatSyntax, self).__init__(name)
         self._syn = syntaxes
 
     def parse(self, input):
-        # parse: To resolve (a string of code or text) into its elements to determine if it conforms to a particular grammar.
         length = 0
         data = {}
 
