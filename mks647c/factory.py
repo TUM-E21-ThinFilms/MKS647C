@@ -32,4 +32,4 @@ class MKS647CFactory:
             device = Ports().get_port(Ports.DEVICE_MKS_GAS_FLOW)
 
         protocol = MKS647CProtocol(logger=logger)
-        return MKS647CDriver(Serial(device, 9600, 8, 'O', 0.3, 1), protocol)
+        return MKS647CDriver(Serial(device, 9600, 8, 'O', 1, 0.3), protocol)
