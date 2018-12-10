@@ -18,6 +18,7 @@ import re
 
 DEBUG = True
 
+
 class ArgumentNotSuppliedError(RuntimeError):
     pass
 
@@ -74,10 +75,6 @@ class Syntax(object):
 
         if name in self._default:
             return self._default[name]
-        print("*args:")
-        print(*args)
-        print("**kwargs")
-        print(**kwargs)
         raise ArgumentNotSuppliedError("No argument given for parameter: name = '" + name + "'")
 
     def parse(self, input):
@@ -93,14 +90,10 @@ class OptionalSyntax(Syntax):
         self._syn = sub_syntax
 
     def parse(self, input):
-
-        if DEBUG:
-            print(repr(input) + " " + self._name)
-
         try:
             res = self._syn.parse(input)
             return IntermediateResult({**res.get_data(), **{self._name: True}}, res.get_length())
-                # form: name, length
+            # form: name, length
         except:
             return IntermediateResult({self._name: False}, 0)
 
@@ -159,16 +152,17 @@ class RepeatSyntax(Syntax):
         raise NotImplementedError()
 
 
-class ConcatSyntax(Syntax): # (wiki) concatenate: Computer instruction to join two strings together.
+class ConcatSyntax(Syntax):  # (wiki) concatenate: Computer instruction to join two strings together.
     """
     To generate the Syntaxes together
     """
+
     def __init__(self, name, syntaxes: List[Syntax]):
         super(ConcatSyntax, self).__init__(name)
         self._syn = syntaxes
 
     def parse(self, input):
-            # parse: To resolve (a string of code or text) into its elements to determine if it conforms to a particular grammar.
+        # parse: To resolve (a string of code or text) into its elements to determine if it conforms to a particular grammar.
         length = 0
         data = {}
 
@@ -220,10 +214,6 @@ class UntilToken(Token):
         self._term = terminator
 
     def parse(self, input):
-
-        if DEBUG:
-            print(repr(input) + " " + self._name + ": " + type(self).__name__)
-
         for key, value in enumerate(input):
             if value == self._term:
                 if key == 0:
@@ -286,10 +276,6 @@ class IntegerToken(RegexToken):
         super(IntegerToken, self).__init__(name, r'\A([-]?\d+)')
 
     def parse(self, input):
-
-        if DEBUG:
-            print(repr(input) + " " + self._name)
-
         result = super(IntegerToken, self).parse(input)
         if result is None:
             return None
@@ -324,10 +310,6 @@ class ConstantToken(RegexToken):
         self._exp = expect
 
     def parse(self, input):
-
-        if DEBUG:
-            print(repr(input) + " " + self._name)
-
         result = super(ConstantToken, self).parse(input)
 
         if result is None:

@@ -67,7 +67,7 @@ class MKS647CDriver:
         self._protocol.write(self._transport, syntax)
 
     def syntax_query(self, syntax):
-        self._protocol.query(self._transport, syntax)
+        return self._protocol.query(self._transport, syntax)
 
     # def query_error(self, query):
     #     raise RuntimeError("Invalid query. {:s} not set yet.".format(query))
