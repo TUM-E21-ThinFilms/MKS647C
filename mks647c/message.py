@@ -204,11 +204,10 @@ class GrammarGeneralResponse(AbstractMessage):
         return ConcatSyntax(self.KEY_SYNTAX, [OptionalSyntax(self.KEY_OPT_VALUE_ERROR, value_error), terminal])
 
     def parse(self, data):
-        self._data = self._syntax.parse(data)
-        return self
+        return self.get_data_class()(self._syntax.parse(data))
 
-    def get_data(self):
-        return DataGeneralResponse(self._data)
+    def get_data_class(self):
+        return DataGeneralResponse
 
 class DataGeneralResponse:
     def __init__(self, data):
