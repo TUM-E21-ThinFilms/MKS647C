@@ -34,11 +34,6 @@ class MKS647CDriver:
 
         self._protocol = protocol
 
-    def test(self):
-        self._transport.write("GM 0 " + chr(0x0d) + chr(0x0a))
-
-        print(self._transport.read(1000))
-
     def build_channel_grammar(self, cmd, channel=None, p1=None, p2=None, p3=None, is_query=True):
 
         grammar = GrammarChannelMessage()
@@ -46,8 +41,8 @@ class MKS647CDriver:
 
         data.set_command(cmd) # cmd is always to be given
 
+        # since channel can also be optional
         if channel is not None:
-            # since channel can also be optional
             data.set_channel(channel)
 
         # if it is to "set": parameters have to be given
@@ -69,9 +64,6 @@ class MKS647CDriver:
     def syntax_query(self, syntax):
         return self._protocol.query(self._transport, syntax)
 
-    # def query_error(self, query):
-    #     raise RuntimeError("Invalid query. {:s} not set yet.".format(query))
-
     def _check(self, channel=None, setpoint=None, query=None):
         if channel is not None:
             if not channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
@@ -80,9 +72,6 @@ class MKS647CDriver:
         if setpoint is not None:
             if not setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
                 raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
-
-        # if query is not None:
-        #     self.query_error(query)
 
     def set_gas_menu(self, gas_menu):
         cmd = "GM"

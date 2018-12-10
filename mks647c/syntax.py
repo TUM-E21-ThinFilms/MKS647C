@@ -93,7 +93,6 @@ class OptionalSyntax(Syntax):
         try:
             res = self._syn.parse(input)
             return IntermediateResult({**res.get_data(), **{self._name: True}}, res.get_length())
-            # form: name, length
         except:
             return IntermediateResult({self._name: False}, 0)
 
