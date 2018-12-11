@@ -6,7 +6,7 @@ from mks647c.factory import MKS647CFactory
 f = MKS647CFactory()
 dr = f.create_device()
 
-dr.test()
+#dr.test()
 
 
 
