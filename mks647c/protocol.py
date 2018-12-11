@@ -24,7 +24,6 @@ from mks647c.message import GrammarChannelMessage
 class ResponseError(RuntimeError):
     pass
 
-
 class MKS647CProtocol:
     def __init__(self, logger=None):
 
@@ -39,7 +38,7 @@ class MKS647CProtocol:
             try:
                 while True:
                     transport.read_bytes(10)
-            except:  # TODO: catch not all exceptions
+            except:
                 return
 
     def create_message(self, msg: AbstractMessage):
@@ -51,10 +50,20 @@ class MKS647CProtocol:
 
     def parse_response(self, raw_response, cls):
         try:
-            return cls().parse(raw_response)
+            response = cls().parse(raw_response)
+
+            if response.has_error():
+                if response.get_error_code() == 0:
+                    raise ResponseError("Channel error: No Channel or unknown channel was specified")
+                if response.get_error_code() == 1:
+                    raise ResponseError("An unknown command was transmitted")
+                # TODO: RAN: implement error codes
+                # write error message depending on the error code
+                raise ResponseError("Received an unknown error from the device")
+
+
         except:
-            # TODO: do not catch all exceptions, only exceptions from parsing.
-            # to Ran: figure out which exceptions those are.
+            # TODO: ALEX: do not catch all exceptions, only exceptions from parsing.
             raise ResponseError("Could not parse message")
 
     def read_response(self, transport, msg: AbstractMessage):

@@ -39,6 +39,7 @@ class GrammarChannelMessage(AbstractMessage):
     KEY_OPT_PARAMETER_2 = 'Optional:p2'
     KEY_OPT_PARAMETER_3 = 'Optional:p3'
     KEY_OPT_ADDITIONAL_TERMINATOR = 'Optional:nl'
+    KEY_OPT_CHANNEL = 'Optional:channel'
     KEY_WHITESPACE = 'whitespace'
     KEY_COMMAND = 'Command'
     KEY_CHANNEL = 'Channel'
@@ -60,7 +61,7 @@ class GrammarChannelMessage(AbstractMessage):
     def _setup(self):
         whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
         cmd = FixedLengthToken(self.KEY_COMMAND, 2)
-        channel = IntegerToken(self.KEY_CHANNEL)
+        channel = OptionalSyntax(self.KEY_OPT_CHANNEL, IntegerToken(self.KEY_CHANNEL))
         query = ConstantToken(self.KEY_QUERY, self.TOKEN_QUERY)
         p1 = FloatToken(self.KEY_PARAMETER_1)
         p2 = OptionalSyntax(self.KEY_OPT_PARAMETER_2, FloatToken(self.KEY_PARAMETER_2))
@@ -106,6 +107,7 @@ class DataChannelMessage:
         :return:
         """
         return {
+            GrammarChannelMessage.KEY_OPT_CHANNEL: self._channel is not None,
             GrammarChannelMessage.KEY_CHANNEL: self._channel,
             GrammarChannelMessage.KEY_COMMAND: self._cmd,
             GrammarChannelMessage.KEY_QUERY_WRITE: self._query_write,

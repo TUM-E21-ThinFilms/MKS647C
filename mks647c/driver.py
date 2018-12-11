@@ -14,18 +14,49 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from mks647c.protocol import MKS647CProtocol
-from mks647c.message import GrammarChannelMessage, DataChannelMessage, GrammarIntegerResponse
+from mks647c.message import GrammarChannelMessage, DataChannelMessage, GrammarIntegerResponse, DataGeneralResponse
 
 from e21_util.pvd.transport import Serial
 
+
+class InvalidArgumentError(RuntimeError):
+    pass
+
+
 class MKS647CDriver:
+
+    # TODO: ALEX: Folgende cmds folgenden nicht der grammatik:
+    #
+    #
+    #
+
+    
+    GAS_MENU_1 = 1
+    GAS_MENU_2 = 2
+    GAS_MENU_3 = 3
+    GAS_MENU_4 = 4
+    GAS_MENU_5 = 5
+    GAS_MENU_DEFAULT = 0
+
+    GAS_MENUS = [GAS_MENU_1, GAS_MENU_2, GAS_MENU_3, GAS_MENU_4, GAS_MENU_5, GAS_MENU_DEFAULT]
+
+    CMD_GAS_MENU = 'GM'
+    CMD_SETPOINT = 'FS'
+    CMD_FLOW = 'FL'
+    CMD_PRESSURE = 'PS'
+    CMD_GAS_CORRECTION_FACTOR = 'GC'
+    CMD_MODE = 'MO'
+    CMD_HIGH_LIMIT = 'HL'
+    CMD_LOW_LIMIT = 'LL'
+    CMD_TRIPLE_LIMIT = 'TM'
+    CMD_GAS_SET = 'GP'
 
     SETPOINT_MIN = 0
     SETPOINT_MAX = 1100
     CHANNEL_MIN = 1
     CHANNEL_MAX = 8
 
-    def __init__(self, transport: Serial, protocol: MKS647CProtocol=None):
+    def __init__(self, transport: Serial, protocol: MKS647CProtocol = None):
 
         self._transport = transport
 
@@ -34,12 +65,12 @@ class MKS647CDriver:
 
         self._protocol = protocol
 
-    def build_channel_grammar(self, cmd, channel=None, p1=None, p2=None, p3=None, is_query=True):
+    def _build_msg(self, cmd, channel=None, p1=None, p2=None, p3=None, is_query=True):
 
-        grammar = GrammarChannelMessage()
+        msg = GrammarChannelMessage()
         data = DataChannelMessage()
 
-        data.set_command(cmd) # cmd is always to be given
+        data.set_command(cmd)  # cmd is always to be given
 
         # since channel can also be optional
         if channel is not None:
@@ -55,317 +86,277 @@ class MKS647CDriver:
             data.set_parameter_2(p2)
             data.set_parameter_3(p3)
 
-        grammar.set_data(data)
-        return grammar
+        msg.set_data(data)
+        return msg
 
-    def syntax_write(self, syntax):
+    def _write_message(self, syntax):
         return self._protocol.write(self._transport, syntax)
 
-    def syntax_query(self, syntax):
+    def _query_message(self, syntax):
         return self._protocol.query(self._transport, syntax)
 
-    def _check(self, channel=None, setpoint=None, query=None):
+    def _check_data_existing(self, data: DataGeneralResponse):
+        if not data.has_data():
+            raise RuntimeError("Did not receive data from the device")
+
+    def _check(self, channel=None, raw_setpoint=None, query=None):
         if channel is not None:
-            if not channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
+            if channel not in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
                 raise RuntimeError("Given channel %s invalid." % str(channel))
 
+        if raw_setpoint is not None:
+            if raw_setpoint not in range(self.SETPOINT_MIN, self.SETPOINT_MAX + 1):
+                raise RuntimeError("Given setpoint %s invalid." % str(raw_setpoint))
+
+    def _get_cmd(self, cmd, channel=None):
+        self._check(channel=channel)
+        msg = self._build_msg(cmd, channel=channel, is_query=True)
+        msg.set_response_class(GrammarIntegerResponse)
+        response = self._query_message(msg)
+        self._check_data_existing(response)
+        return response
+
+    def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None):
         if setpoint is not None:
-            if not setpoint in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
-                raise RuntimeError("Given setpoint %s invalid." % str(setpoint))
+            raw_setpoint = self._to_raw_setpoint(setpoint_percentage)
+            if p1 is not None:
+                p2 = raw_setpoint
+            else:
+                p1 = raw_setpoint
+
+        self._check(channel=channel, raw_setpoint=raw_setpoint)
+        msg = self._build_msg(cmd, channel=channel, p1=p1, p2=p2, is_query=False)
+        return self._write_message(msg)
+
+    @staticmethod
+    def _to_raw_setpoint(setpoint_percentage):
+        return round(float(setpoint_percentage) * 1000.0)
+
+    @staticmethod
+    def _from_raw_setpoint(setpoint_raw):
+        return float(setpoint_raw) / 1000.0
 
     def set_gas_menu(self, gas_menu):
-        cmd = "GM"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, is_query=False)
-            self.syntax_write(syntaxes)
-        except:
-            raise RuntimeError("Given gas menu invalid. Must be 1..5.")
+        if gas_menu not in self.GAS_MENUS:
+            raise InvalidArgumentError("Invalid gas menu given")
+
+        self._set_cmd(self.CMD_GAS_MENU, p1=gas_menu)
 
     def get_gas_menu(self):
-        cmd = "GM"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntax_write(syntaxes)
-        except:
-            pass
-        # Todo: exception?
+        return int(self._get_cmd(self.CMD_GAS_MENU).get_value_1())
 
-
-    def set_setpoint(self, channel, setpoint):
-        self._check(channel=channel, setpoint=setpoint)
-        syntax = self.build_channel_grammar("FS", channel, p1=setpoint, is_query=False)
-        self.syntax_write(syntax)
+    def set_setpoint(self, channel, setpoint_percentage):
+        self._set_cmd(self.CMD_SETPOINT, channel, setpoint_percentage=setpoint_percentage)
 
     def get_setpoint(self, channel):
-        self._check(channel=channel)
-        syntax = self.build_channel_grammar("FS", channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self.syntax_query(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_SETPOINT, channel).get_value_1())
 
     def get_flow(self, channel):
-        # TODO: to check if is_query should be True or False
-        cmd = "FL"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, channel, is_query=True)
-            self.syntax_write(syntaxes)
-        except:
-            self.error_check(channel)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_FLOW, channel).get_value_1())
 
-    def set_setpoint_pressure(self, setpoint):
-        cmd = "PS"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, p1=setpoint, is_query=False)
-            self.syntax_write(syntaxes)
-        except:
-            self.error_check(setpoint)
+    def set_pressure(self, setpoint_percentage):
+        self._set_cmd(self.CMD_PRESSURE, setpoint_percentage=setpoint_percentage)
 
-    def get_setpoint_pressure(self):
-        cmd = "PS"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntax_write(syntaxes)
-        except:
-            pass
-        # Todo: exception?
+
+
+
+
+
+    def get_pressure_setpoint(self):
+        syntax = self._build_msg(self.CMD_PRESSURE, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
 
     def get_pressure(self):
-        # TODO: to check if is_query should be True or False
-        cmd = "PR"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntax_write(syntaxes)
-        except:
-            pass
-        # Todo: exception?
+        # TODO: to check if it's okay to have "R" in the input
+        syntax = self._build_msg("PR", is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
 
     def get_pressure_control_signal(self):
-        # TODO: to check if is_query should be True or False
-        cmd = "PC"
-        try:
-            syntaxes = self.build_channel_grammar(cmd, is_query=True)
-            self.syntax_write(syntaxes)
-        except:
-            pass
-        # Todo: exception?
+        # TODO: to check if it's okay to have "R" in the input
+        syntax = self._build_msg("PC", is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
 
-    def set_pressure_mode(self, mode):
-        cmd = "PM"
-        if mode in (0, 1):
-            try:
-                syntaxes = self.build_channel_grammar(cmd, p1=mode, is_query=False)
-                self.syntax_write(syntaxes)
-            except:
-                pass
-            # Todo: exception?
-        else:
-            raise RuntimeError("Given pressure mode {} invalid".format(mode))
+    # def set_pressure_mode(self, mode):
+    #     if mode in (0, 1):
+    #         syntax = self.build_channel_grammar("PM", p1=mode, is_query=False)
+    #         self.syntax_write(syntax)
+    #     else:
+    #         raise RuntimeError("Given pressure mode {} invalid".format(mode))
 
     def get_pressure_mode(self):
-        cmd = "PM"
-        #    if query_write is "R":
-        #        return self.build_channel_grammar(cmd, is_query=True)
-        #    else:
-        #        self.query_check()
-        #else:
-        #    self.cmd_check(cmd)
-    """
-    def range_set(self, channel, range_code):
-        cmd = "RA":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if range_code in range(1, 39+1):
-                    return self.build_channel_grammar(cmd, channel=channel, p1=range_code, is_query=False)
+        syntax = self._build_msg("PM", is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def set_range(self, channel, range_code):
+        # TODO: meanings of the ranges
+        self._check(channel=channel)
+        if range_code in range(1, 39 + 1):
+            syntax = self._build_msg("PS", channel=channel, p1=range_code, is_query=False)
+            self._write_message(syntax)
+
+    def get_range(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg("RA", channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def set_gas_correction_factor(self, channel, factor):
+        # TODO: check the right form of the factor
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_GAS_CORRECTION_FACTOR, channel=channel, p1=factor, is_query=False)
+        self._write_message(syntax)
+
+    def get_gas_correction_factor(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_GAS_CORRECTION_FACTOR, channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def set_mode(self, channel, mode, master=None):
+        self._check(channel=channel)
+        if mode == 1:  # 1 (slave)
+            # master has to be given only if mode is 1
+            if master in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
+                if master is channel:
+                    raise RuntimeError(
+                        "Given master {} invalid. Must be different from the slave channel {}.".format(master, channel))
                 else:
-                    raise RuntimeError("Given range code {} invalid".format(range_code))
+                    p2 = master
             else:
-                self.channel_error(channel)
+                raise RuntimeError("Given master {} invalid. Must be 1..8.".format(master))
+        elif mode in (0, 2, 3, 9):  # 0 (independent), 2(extern), 3 (PCS), 9 (test)
+            p2 = None
         else:
-            self.cmd_check(cmd)
+            raise RuntimeError("Given mode {} invalid. Must be 0, 1, 2, 3 or 9.".format(mode))
+        syntax = self._build_msg(self.CMD_MODE, channel=channel, p1=mode, p2=p2, is_query=False)
+        self._write_message(syntax)
 
-    def range_check(self, channel, query_write):
-        cmd = "RA":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if query_write is "R":
-                    return self.build_channel_grammar(cmd, channel=channel, is_query=True)
-                else:
-                    self.query_check()
-            else:
-                self.channel_error(channel)
+    def get_mode(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_MODE, channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    # def zero_adjust(self, channel):
+    #     # TODO: to check if "R" is necessary or optional
+    #     cmd = "AZ":
+    #         if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
+    #             return self.build_channel_grammar(cmd, channel=channel, is_query=True)
+    #         else:
+    #             self.channel_error(channel)
+    #     else:
+    #         self.cmd_check(cmd)
+
+    def set_high_limit(self, channel, high_limit):
+        self._check(channel=channel, raw_setpoint=high_limit)
+        syntax = self._build_msg(self.CMD_HIGH_LIMIT, channel=channel, p1=high_limit, is_query=False)
+        self._write_message(syntax)
+
+    def get_high_limit(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_HIGH_LIMIT, channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def set_low_limit(self, channel, low_limit):
+        self._check(channel=channel, raw_setpoint=low_limit)
+        syntax = self._build_msg(self.CMD_LOW_LIMIT, channel=channel, p1=low_limit, is_query=False)
+        self._write_message(syntax)
+
+    def get_low_limit(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_LOW_LIMIT, channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def set_trip_limits_mode(self, channel, mode):
+        # TODO: explicitly define the meanings of modes
+        self._check(channel=channel)
+        if mode in (0, 1, 2):  # 0 = sleep, 1 = limit, 2= band
+            syntax = self._build_msg(self.CMD_TRIPLE_LIMIT, channel=channel, p1=mode, is_query=False)
+            self._write_message(syntax)
         else:
-            self.cmd_check(cmd)
+            raise RuntimeError("Given mode {} invalid. Must be 0, 1 or 2.".format(mode))
 
-    def gas_correction_factor_set(self, channel, factor):
-        cmd = "GC":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if factor in range(10,180+1):
-                    return self.build_channel_grammar(cmd, channel=channel, p1=factor, is_query=False)
-                else:
-                    raise RuntimeError("Given factor {} invalid. Must be 10..180.".format(factor))
-            else:
-                self.channel_error(channel)
+    def get_trip_limits_mode(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg(self.CMD_TRIPLE_LIMIT, channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
+
+    def gas_set(self, channel, gas_set, setpoint):
+        # TODO: explicitly define the meanings of gas sets
+        self._check(channel=channel, raw_setpoint=setpoint)
+        if gas_set in range(1, 6):
+            syntax = self._build_msg(self.CMD_GAS_SET, channel=channel, p1=gas_set, p2=setpoint, is_query=False)
+            self._write_message(syntax)
         else:
-            self.cmd_check(cmd)
+            raise RuntimeError("Given gas set {} invalid. Must be 1..5.".format(gas_set))
 
+    def get_setpoint_gas_set(self, channel, gas_set):
+        # TODO: giving parameter when is_query=True?
+        # TODO: explicitly define the meanings of gas sets
+        self._check(channel=channel)
+        if gas_set in range(1, 6):
+            syntax = self._build_msg(self.CMD_GAS_SET, channel=channel, p1=gas_set, is_query=True)
+            syntax.set_response_class(GrammarIntegerResponse)
+            return self._query_message(syntax)
 
-    def gas_correction_factor_check(self, channel, query_write):
-        cmd = "GC":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if query_write is "R":
-                    return self.build_channel_grammar(cmd, channel=channel, is_query=True)
-                else:
-                    self.query_check()
-            else:
-                self.channel_error(channel)
-        else:
-            self.cmd_check(cmd)
+    # def zero_adjust_pressure(self):
+    #     cmd = "PZ"
+    #     return self.build_channel_grammar(cmd)
+    #
+    # def pressure_controller(self):
+    #     cmd = "GT"
+    #     controller_mode = 1 # 0..5
+    #     return self.build_channel_grammar(cmd, channel=controller_mode)
+    #
+    # def pressure_controller_check(self):
+    #     cmd = "GT"
+    #     if query_write is "R"
+    #     return self.build_channel_grammar(cmd, is_query=True)
+    #
+    # def pressure_unit_check(self):
+    #     cmd = "PU"
+    #     if query_write is "R"
+    #     return self.build_channel_grammar(cmd, is_query=True)
+    #
+    # def open_valve(self):
+    #     cmd = "ON"
+    #     valve = 0 # 0 = on all; 1..8 = channel valve
+    #     return self.build_channel_grammar(cmd, channel=valve)
+    #
+    # def close_valve(self):
+    #     cmd = "OF"
+    #     valve = 0 # 0 = off all; 1..8 = channel valve
+    #     return self.build_channel_grammar(cmd, channel=valve)
 
-    def mode_set(self, channel, mode, master=None):
-        # master has to be given only if mode is 1
-        cmd = "MO":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if mode == 1: #1 (slave)
-                    if master in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                        return self.build_channel_grammar(cmd, channel=channel, p1=mode, p2=master, is_query=False)
-                    else:
-                        raise RuntimeError("Given master {} invalid. Must be 1..8.".format(master))
-                elif mode in (0, 2, 3, 9): # 0 (independent), 2(extern), 3 (PCS), 9 (test)
-                    return self.build_channel_grammar(cmd, channel=channel, p1=mode)
-                else:
-                    raise RuntimeError("Given mode {} invalid. Must be 0, 1, 2, 3 or 9.".format(mode))
-            else:
-                self.channel_error(channel)
-        else:
-            self.cmd_check(cmd)
+    def get_channel_status(self, channel):
+        self._check(channel=channel)
+        syntax = self._build_msg("ST", channel=channel, is_query=True)
+        syntax.set_response_class(GrammarIntegerResponse)
+        return self._query_message(syntax)
 
-    def mode_check(self, channel, query_write):
-        cmd = "MO":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if query_write is "R":
-                    return self.build_channel_grammar(cmd, channel=channel, is_query=True)
-                else:
-                    self.query_check()
-            else:
-                self.channel_error(channel)
-        else:
-            self.cmd_check(cmd)
-
-    def zero_adjust(self, channel):
-        # TODO: to check if "R" is necessary or optional
-        cmd = "AZ":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                return self.build_channel_grammar(cmd, channel=channel, is_query=True)
-            else:
-                self.channel_error(channel)
-        else:
-            self.cmd_check(cmd)
-
-    def high_limit_set(self, channel, high_limit):
-        cmd = "HL":
-            if channel in range(self.CHANNEL_MIN, self.CHANNEL_MAX+1):
-                if high_limit in range(self.SETPOINT_MIN, self.SETPOINT_MAX+1):
-                    return self.build_channel_grammar(cmd, channel=high_limit, is_query=False)
-                else:
-                    self.setpoint_error(high_limit)
-            else:
-                self.channel_error(channel)
-        else:
-            self.cmd_check(cmd)
-
-    def high_limit_check(self):
-        cmd = "HL"
-        channel = 1 # 1..8
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, channel=channel, query_write=query_write)
-
-    def low_limit(self):
-        cmd = "LL"
-        channel = 1 # 1..8
-        limit = 0
-        return self.build_channel_grammar(cmd, channel=channel, p1=limit)
-
-    def low_limit_check(self):
-        cmd = "LL"
-        channel = 1 # 1..8
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, channel=channel, query_write=query_write)
-
-    def trip_limits_mode(self):
-        cmd = "TM"
-        channel = 1 # 1..8
-        mode = 0 # 0 = sleep, 1 = limit, 2= band
-        return self.build_channel_grammar(cmd, channel=channel, p1=mode)
-
-    def trip_limits_mode_check(self):
-        cmd = "TM"
-        channel = 1 # 1..8
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, channel=channel, query_write=query_write)
-
-    def gas_set(self):
-        cmd = "GP"
-        channel = 1 # 1..8
-        gasset = 0 # gas set 1 to 5
-        setpoint = 0 # 0..1100
-        return self.build_channel_grammar(cmd, channel=channel, p1=gasset, p2=setpoint)
-
-    def gas_set_check(self):
-        cmd = "GP"
-        channel = 1 # 1..8
-        gasset = 0 # gas set 1 to 5
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, channel=channel, p1=gasset, query_write=query_write)
-
-    def zero_adjust_pressure(self):
-        cmd = "PZ"
-        return self.build_channel_grammar(cmd)
-
-    def pressure_controller(self):
-        cmd = "GT"
-        controller_mode = 1 # 0..5
-        return self.build_channel_grammar(cmd, channel=controller_mode)
-
-    def pressure_controller_check(self):
-        cmd = "GT"
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, query_write=query_write)
-
-    def pressure_unit_check(self):
-        cmd = "PU"
-        if query_write is "R"
-        return self.build_channel_grammar(cmd, query_write=query_write)
-
-    def open_valve(self):
-        cmd = "ON"
-        valve = 0 # 0 = on all; 1..8 = channel valve
-        return self.build_channel_grammar(cmd, channel=valve)
-
-    def close_valve(self):
-        cmd = "OF"
-        valve = 0 # 0 = off all; 1..8 = channel valve
-        return self.build_channel_grammar(cmd, channel=valve)
-
-    def status_channel(self):
-        cmd = "ST"
-        channel = 0 # 0 = off all; 1..8 = channel valve
-        return self.build_channel_grammar(cmd, channel=channel)
-
-    def keyboard_disable(self):
-        cmd = "KD"
-        return self.build_channel_grammar(cmd)
-
-    def keyboard_enable(self):
-        cmd = "KE"
-        return self.build_channel_grammar(cmd)
-
-    def parameter_default(self): # set all parameters to default
-        cmd = "DF"
-        return self.build_channel_grammar(cmd)
-
-    def hardware_reset(self): # performe a hardware reset, like power up
-        cmd = "RE"
-        return self.build_channel_grammar(cmd)
-
-    def identification(self): # check for identification
-        cmd = "ID"
-        return self.build_channel_grammar(cmd)
-
-    """
+    # def keyboard_disable(self):
+    #     cmd = "KD"
+    #     return self.build_channel_grammar(cmd)
+    #
+    # def keyboard_enable(self):
+    #     cmd = "KE"
+    #     return self.build_channel_grammar(cmd)
+    #
+    # def parameter_default(self): # set all parameters to default
+    #     cmd = "DF"
+    #     return self.build_channel_grammar(cmd)
+    #
+    # def hardware_reset(self): # performe a hardware reset, like power up
+    #     cmd = "RE"
+    #     return self.build_channel_grammar(cmd)
+    #
+    # def identification(self): # check for identification
+    #     cmd = "ID"
+    #     return self.build_channel_grammar(cmd)
