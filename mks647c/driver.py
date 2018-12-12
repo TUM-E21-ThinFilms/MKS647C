@@ -27,10 +27,45 @@ class MKS647CDriver:
 
     # TODO: ALEX: Folgende cmds folgenden nicht der grammatik:
     #
+    # Check-CMD(s) ohne R:
+    # FL c: check for actual flow of a channel
+    # PR: check for pressure
+    # PC: check for PCS (pressure control signal)
+    # AZ c: zero adjust MFC, aber man bekommt ein Offset-Wert zurück
+    # PZ: zero adjust pressure, aber man bekommt ein Offset-Wert zurück
+    # ST c: check for status of a channel
+    # ID: check for identification
+    #
+    # CMD(s) mit R und Parameters geleichzeitig:
+    # GP c s R: check for setpoint in gas set, wofür man auch s=gas_set eingeben muss
+    #
+    # CMD(s) wo die Channels auch null sein darf:
+    # ON c: open valve, wo c=0 entspricht ON ALL
+    # OF c: close valve, wo c=0 entspricht OFF ALL
     #
     #
 
-    
+
+    CMD_GAS_MENU = 'GM'
+    CMD_SETPOINT = 'FS'
+    CMD_FLOW = 'FL'
+    CMD_PRESSURE = 'PS'
+    CMD_PRESSURE_MODE = 'PM'
+    CMD_GAS_CORRECTION_FACTOR = 'GC'
+    CMD_MODE = 'MO'
+    CMD_HIGH_LIMIT = 'HL'
+    CMD_LOW_LIMIT = 'LL'
+    CMD_TRIPLE_LIMIT = 'TM'
+    CMD_GAS_SET = 'GP'
+    CMD_RANGE = 'RA'
+
+
+    SETPOINT_MIN = 0
+    SETPOINT_MAX = 1100
+    CHANNEL_MIN = 1
+    CHANNEL_MAX = 8
+
+
     GAS_MENU_1 = 1
     GAS_MENU_2 = 2
     GAS_MENU_3 = 3
@@ -40,21 +75,12 @@ class MKS647CDriver:
 
     GAS_MENUS = [GAS_MENU_1, GAS_MENU_2, GAS_MENU_3, GAS_MENU_4, GAS_MENU_5, GAS_MENU_DEFAULT]
 
-    CMD_GAS_MENU = 'GM'
-    CMD_SETPOINT = 'FS'
-    CMD_FLOW = 'FL'
-    CMD_PRESSURE = 'PS'
-    CMD_GAS_CORRECTION_FACTOR = 'GC'
-    CMD_MODE = 'MO'
-    CMD_HIGH_LIMIT = 'HL'
-    CMD_LOW_LIMIT = 'LL'
-    CMD_TRIPLE_LIMIT = 'TM'
-    CMD_GAS_SET = 'GP'
 
-    SETPOINT_MIN = 0
-    SETPOINT_MAX = 1100
-    CHANNEL_MIN = 1
-    CHANNEL_MAX = 8
+    PRESSURE_MODE_OFF = 0
+    PRESSURE_MODE_AUTO = 1
+
+    PRESSURE_MODES = [PRESSURE_MODE_OFF, PRESSURE_MODE_AUTO]
+
 
     def __init__(self, transport: Serial, protocol: MKS647CProtocol = None):
 
@@ -117,7 +143,7 @@ class MKS647CDriver:
         return response
 
     def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None):
-        if setpoint is not None:
+        if setpoint_percentage is not None:
             raw_setpoint = self._to_raw_setpoint(setpoint_percentage)
             if p1 is not None:
                 p2 = raw_setpoint
@@ -139,7 +165,6 @@ class MKS647CDriver:
     def set_gas_menu(self, gas_menu):
         if gas_menu not in self.GAS_MENUS:
             raise InvalidArgumentError("Invalid gas menu given")
-
         self._set_cmd(self.CMD_GAS_MENU, p1=gas_menu)
 
     def get_gas_menu(self):
@@ -157,52 +182,39 @@ class MKS647CDriver:
     def set_pressure(self, setpoint_percentage):
         self._set_cmd(self.CMD_PRESSURE, setpoint_percentage=setpoint_percentage)
 
-
-
-
-
-
     def get_pressure_setpoint(self):
-        syntax = self._build_msg(self.CMD_PRESSURE, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_PRESSURE).get_value_1())
 
-    def get_pressure(self):
-        # TODO: to check if it's okay to have "R" in the input
-        syntax = self._build_msg("PR", is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+    # def get_pressure(self):
+    #     # TODO: to check if it's okay to have "R" in the input
+    #     syntax = self._build_msg("PR", is_query=True)
+    #     syntax.set_response_class(GrammarIntegerResponse)
+    #     return self._query_message(syntax)
+    #
+    # def get_pressure_control_signal(self):
+    #     # TODO: to check if it's okay to have "R" in the input
+    #     syntax = self._build_msg("PC", is_query=True)
+    #     syntax.set_response_class(GrammarIntegerResponse)
+    #     return self._query_message(syntax)
 
-    def get_pressure_control_signal(self):
-        # TODO: to check if it's okay to have "R" in the input
-        syntax = self._build_msg("PC", is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
-
-    # def set_pressure_mode(self, mode):
-    #     if mode in (0, 1):
-    #         syntax = self.build_channel_grammar("PM", p1=mode, is_query=False)
-    #         self.syntax_write(syntax)
-    #     else:
-    #         raise RuntimeError("Given pressure mode {} invalid".format(mode))
+    def set_pressure_mode(self, mode):
+        if mode in self.PRESSURE_MODES:
+            self._set_cmd(self.CMD_PRESSURE_MODE, p1=mode)
+        else:
+            raise RuntimeError("Given pressure mode {} invalid".format(mode))
 
     def get_pressure_mode(self):
-        syntax = self._build_msg("PM", is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_PRESSURE_MODE).get_value_1())
 
     def set_range(self, channel, range_code):
         # TODO: meanings of the ranges
-        self._check(channel=channel)
         if range_code in range(1, 39 + 1):
-            syntax = self._build_msg("PS", channel=channel, p1=range_code, is_query=False)
-            self._write_message(syntax)
+            self._set_cmd(self.CMD_PRESSURE_MODE, channel=channel, p1=range_code)
+        else:
+            raise RuntimeError("Given range code {} invalid.".format(range_code))
 
     def get_range(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg("RA", channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_PRESSURE_MODE, channel=channel).get_value_1())
 
     def set_gas_correction_factor(self, channel, factor):
         # TODO: check the right form of the factor
