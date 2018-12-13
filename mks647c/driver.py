@@ -51,19 +51,27 @@ class MKS647CDriver:
     CMD_FLOW = 'FL'
     CMD_PRESSURE = 'PS'
     CMD_PRESSURE_MODE = 'PM'
+    CMD_RANGE = 'RA'
     CMD_GAS_CORRECTION_FACTOR = 'GC'
     CMD_MODE = 'MO'
     CMD_HIGH_LIMIT = 'HL'
     CMD_LOW_LIMIT = 'LL'
     CMD_TRIPLE_LIMIT = 'TM'
     CMD_GAS_SET = 'GP'
-    CMD_RANGE = 'RA'
+
 
 
     SETPOINT_MIN = 0
     SETPOINT_MAX = 1100
+
     CHANNEL_MIN = 1
     CHANNEL_MAX = 8
+
+    GAS_RANGE_MIN = 0
+    GAS_RANGE_MAX = 39
+
+    COREECTION_FACTOR_MIN = 10
+    COREECTION_FACTOR_MAX = 180
 
 
     GAS_MENU_1 = 1
@@ -82,6 +90,58 @@ class MKS647CDriver:
     PRESSURE_MODES = [PRESSURE_MODE_OFF, PRESSURE_MODE_AUTO]
 
 
+    GAS_RANGE_1_SCCM = 0
+    GAS_RANGE_2_SCCM = 1
+    GAS_RANGE_5_SCCM = 2
+    GAS_RANGE_10_SCCM = 3
+    GAS_RANGE_20_SCCM = 4
+    GAS_RANGE_50_SCCM = 5
+    GAS_RANGE_100_SCCM = 6
+    GAS_RANGE_200_SCCM = 7
+    GAS_RANGE_500_SCCM = 8
+
+    GAS_RANGE_1_SLM = 9
+    GAS_RANGE_2_SLM = 10
+    GAS_RANGE_5_SLM = 11
+    GAS_RANGE_10_SLM = 12
+    GAS_RANGE_20_SLM = 13
+    GAS_RANGE_50_SLM = 14
+    GAS_RANGE_100_SLM = 15
+    GAS_RANGE_200_SLM = 16
+    GAS_RANGE_400_SLM = 17
+    GAS_RANGE_500_SLM = 18
+    GAS_RANGE_30_SLM = 38
+    GAS_RANGE_300_SLM = 39
+
+    GAS_RANGE_1_SCMM = 19
+
+    GAS_RANGE_1_SCFH = 20
+    GAS_RANGE_2_SCFH = 21
+    GAS_RANGE_5_SCFH = 22
+    GAS_RANGE_10_SCFH = 23
+    GAS_RANGE_20_SCFH = 24
+    GAS_RANGE_50_SCFH = 25
+    GAS_RANGE_100_SCFH = 26
+    GAS_RANGE_200_SCFH = 27
+    GAS_RANGE_500_SCFH = 28
+
+    GAS_RANGE_1_SCFM = 29
+    GAS_RANGE_2_SCFM = 30
+    GAS_RANGE_5_SCFM = 31
+    GAS_RANGE_10_SCFM = 32
+    GAS_RANGE_20_SCFM = 33
+    GAS_RANGE_50_SCFM = 34
+    GAS_RANGE_100_SCFM = 35
+    GAS_RANGE_200_SCFM = 36
+    GAS_RANGE_500_SCFM = 37
+
+    CHANNEL_MODE_INDEPENDENT = 0
+    CHANNEL_MODE_SLAVE = 1
+    CHANNEL_MODE_EXTERN = 2
+    CHANNEL_MODE_PCS = 3
+    CHANNEL_MODE_TEST = 9
+
+
     def __init__(self, transport: Serial, protocol: MKS647CProtocol = None):
 
         self._transport = transport
@@ -92,6 +152,9 @@ class MKS647CDriver:
         self._protocol = protocol
 
     def _build_msg(self, cmd, channel=None, p1=None, p2=None, p3=None, is_query=True):
+        # works also for cmds that do not need any channel
+        # 'R' for request, however, is incompatible with parameters p1..p3
+        # TODO: adjust it for the cmd 'GP' or write a new method for it (also the syntax class etc)
 
         msg = GrammarChannelMessage()
         data = DataChannelMessage()
@@ -125,7 +188,7 @@ class MKS647CDriver:
         if not data.has_data():
             raise RuntimeError("Did not receive data from the device")
 
-    def _check(self, channel=None, raw_setpoint=None, query=None):
+    def _check(self, channel=None, raw_setpoint=None):
         if channel is not None:
             if channel not in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
                 raise RuntimeError("Given channel %s invalid." % str(channel))
@@ -135,6 +198,9 @@ class MKS647CDriver:
                 raise RuntimeError("Given setpoint %s invalid." % str(raw_setpoint))
 
     def _get_cmd(self, cmd, channel=None):
+        # works only for cmds with R but without extra parameters p1..p3
+        # If a setpoint is got, it will be returned in an integer form to the explicit method, which must convert it
+        # into a natural form by itself
         self._check(channel=channel)
         msg = self._build_msg(cmd, channel=channel, is_query=True)
         msg.set_response_class(GrammarIntegerResponse)
@@ -143,24 +209,33 @@ class MKS647CDriver:
         return response
 
     def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None):
+        # practically no p3 will be transferred according to the manual
         if setpoint_percentage is not None:
             raw_setpoint = self._to_raw_setpoint(setpoint_percentage)
+            self._check(raw_setpoint=raw_setpoint)
             if p1 is not None:
                 p2 = raw_setpoint
             else:
                 p1 = raw_setpoint
-
-        self._check(channel=channel, raw_setpoint=raw_setpoint)
+        self._check(channel=channel)
         msg = self._build_msg(cmd, channel=channel, p1=p1, p2=p2, is_query=False)
         return self._write_message(msg)
 
     @staticmethod
     def _to_raw_setpoint(setpoint_percentage):
-        return round(float(setpoint_percentage) * 1000.0)
+        return round(float(setpoint_percentage) * 1000.0) # from float (0, 1.1) to integer (0, 1100)
 
     @staticmethod
     def _from_raw_setpoint(setpoint_raw):
-        return float(setpoint_raw) / 1000.0
+        return float(setpoint_raw) / 1000.0 # from integer (0, 1100) to float (0, 1.1)
+
+    @staticmethod
+    def _to_raw_correction_factor(correction_factor_percentage):
+        return round(float(correction_factor_percentage) * 100.0) # from float (0.1, 1.8) to integer (10, 180)
+
+    @staticmethod
+    def _from_raw_correction_factor(correction_factor_raw):
+        return float(correction_factor_raw) / 100.0 # from integer (10, 180) to float (0.1, 1.8)
 
     def set_gas_menu(self, gas_menu):
         if gas_menu not in self.GAS_MENUS:
@@ -198,39 +273,33 @@ class MKS647CDriver:
     #     return self._query_message(syntax)
 
     def set_pressure_mode(self, mode):
-        if mode in self.PRESSURE_MODES:
-            self._set_cmd(self.CMD_PRESSURE_MODE, p1=mode)
-        else:
+        if mode not in self.PRESSURE_MODES:
             raise RuntimeError("Given pressure mode {} invalid".format(mode))
+        self._set_cmd(self.CMD_PRESSURE_MODE, p1=mode)
 
     def get_pressure_mode(self):
-        return self._from_raw_setpoint(self._get_cmd(self.CMD_PRESSURE_MODE).get_value_1())
+        return int(self._get_cmd(self.CMD_PRESSURE_MODE).get_value_1())
 
     def set_range(self, channel, range_code):
-        # TODO: meanings of the ranges
-        if range_code in range(1, 39 + 1):
-            self._set_cmd(self.CMD_PRESSURE_MODE, channel=channel, p1=range_code)
-        else:
-            raise RuntimeError("Given range code {} invalid.".format(range_code))
+        if range_code not in range(0, 39 + 1):
+            raise RuntimeError("Given range code invalid.")
+        self._set_cmd(self.CMD_RANGE, channel=channel, p1=range_code)
 
     def get_range(self, channel):
-        return self._from_raw_setpoint(self._get_cmd(self.CMD_PRESSURE_MODE, channel=channel).get_value_1())
+        return int(self._get_cmd(self.CMD_RANGE, channel=channel).get_value_1())
 
-    def set_gas_correction_factor(self, channel, factor):
-        # TODO: check the right form of the factor
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_GAS_CORRECTION_FACTOR, channel=channel, p1=factor, is_query=False)
-        self._write_message(syntax)
+    def set_gas_correction_factor(self, channel, factor_percentage):
+        if 0.1 < factor_percentage < 1.8:
+            raw_factor = self._to_raw_correction_factor(factor_percentage)
+        else:
+            raise RuntimeError("Given gas correction factor {} invalid.".format(factor_percentage))
+        self._set_cmd(self.CMD_GAS_CORRECTION_FACTOR, channel=channel, p1=raw_factor)
 
     def get_gas_correction_factor(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_GAS_CORRECTION_FACTOR, channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_correction_factor(self._get_cmd(self.CMD_GAS_CORRECTION_FACTOR, channel).get_value_1())
 
     def set_mode(self, channel, mode, master=None):
-        self._check(channel=channel)
-        if mode == 1:  # 1 (slave)
+        if mode == self.CHANNEL_MODE_SLAVE:
             # master has to be given only if mode is 1
             if master in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
                 if master is channel:
@@ -240,18 +309,16 @@ class MKS647CDriver:
                     p2 = master
             else:
                 raise RuntimeError("Given master {} invalid. Must be 1..8.".format(master))
-        elif mode in (0, 2, 3, 9):  # 0 (independent), 2(extern), 3 (PCS), 9 (test)
+        elif mode in (self.CHANNEL_MODE_INDEPENDENT, self.CHANNEL_MODE_EXTERN, self.CHANNEL_MODE_PCS,
+                      self.CHANNEL_MODE_TEST):  # 0 (independent), 2(extern), 3 (PCS), 9 (test)
             p2 = None
         else:
             raise RuntimeError("Given mode {} invalid. Must be 0, 1, 2, 3 or 9.".format(mode))
-        syntax = self._build_msg(self.CMD_MODE, channel=channel, p1=mode, p2=p2, is_query=False)
-        self._write_message(syntax)
+        self._set_cmd(self.CMD_MODE, channel=channel, p1=mode, p2=p2)
 
     def get_mode(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_MODE, channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        # TODO: die 2. Wert optional?
+        return int(self._get_cmd(self.CMD_MODE, channel).get_value_1())
 
     # def zero_adjust(self, channel):
     #     # TODO: to check if "R" is necessary or optional
@@ -372,3 +439,10 @@ class MKS647CDriver:
     # def identification(self): # check for identification
     #     cmd = "ID"
     #     return self.build_channel_grammar(cmd)
+
+
+# MKS647CDriver.set_gas_range(MKS647CDriver.GAS_RANGE_5_SCCM)
+# gas_range = MKS647CDriver.get_gas_range()
+#
+# if gas_range is MKS647CDriver.GAS_RANGE_5_SCCM:
+#     pass
