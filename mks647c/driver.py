@@ -58,6 +58,7 @@ class MKS647CDriver:
     CMD_LOW_LIMIT = 'LL'
     CMD_TRIPLE_LIMIT = 'TM'
     CMD_GAS_SET = 'GP'
+    CMD_CHANNEL_STATUS = 'ST'
 
 
 
@@ -140,6 +141,26 @@ class MKS647CDriver:
     CHANNEL_MODE_EXTERN = 2
     CHANNEL_MODE_PCS = 3
     CHANNEL_MODE_TEST = 9
+
+
+    TRIP_LIMIT_MODE_SLEEP = 0
+    TRIP_LIMIT_MODE_LIMIT = 1
+    TRIP_LIMIT_MODE_BAND = 2
+
+    TRIP_LIMIT_MODES = [TRIP_LIMIT_MODE_SLEEP, TRIP_LIMIT_MODE_LIMIT, TRIP_LIMIT_MODE_BAND]
+
+
+    STATUS_BIT_ON_OFF = 0
+    STATUS_BIT_TRIP_LIMIT_LOW = 4
+    STATUS_BIT_TRIP_LIMIT_HIGH = 5
+    STATUS_BIT_OVERFLOW_IN = 6
+    STATUS_BIT_UNDERFLOW_IN = 7
+    STATUS_BIT_OVERFLOW_OUT = 8
+    STATUS_BIT_UNDERFLOW_OUT = 9
+
+    STATUS_BITS = [STATUS_BIT_ON_OFF, STATUS_BIT_TRIP_LIMIT_LOW, STATUS_BIT_TRIP_LIMIT_HIGH, STATUS_BIT_OVERFLOW_IN,
+                   STATUS_BIT_UNDERFLOW_IN, STATUS_BIT_OVERFLOW_OUT, STATUS_BIT_UNDERFLOW_OUT]
+
 
 
     def __init__(self, transport: Serial, protocol: MKS647CProtocol = None):
@@ -317,8 +338,10 @@ class MKS647CDriver:
         self._set_cmd(self.CMD_MODE, channel=channel, p1=mode, p2=p2)
 
     def get_mode(self, channel):
-        # TODO: die 2. Wert optional?
-        return int(self._get_cmd(self.CMD_MODE, channel).get_value_1())
+        response = self._get_cmd(self.CMD_MODE, channel)
+        v1 = response.get_value_1()
+        v2 = response.get_value_2()
+        return int(v1, v2)
 
     # def zero_adjust(self, channel):
     #     # TODO: to check if "R" is necessary or optional
@@ -331,59 +354,37 @@ class MKS647CDriver:
     #         self.cmd_check(cmd)
 
     def set_high_limit(self, channel, high_limit):
-        self._check(channel=channel, raw_setpoint=high_limit)
-        syntax = self._build_msg(self.CMD_HIGH_LIMIT, channel=channel, p1=high_limit, is_query=False)
-        self._write_message(syntax)
+        self._set_cmd(self.CMD_HIGH_LIMIT, channel=channel, setpoint_percentage=high_limit)
 
     def get_high_limit(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_HIGH_LIMIT, channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_HIGH_LIMIT, channel=channel).get_value_1())
 
     def set_low_limit(self, channel, low_limit):
-        self._check(channel=channel, raw_setpoint=low_limit)
-        syntax = self._build_msg(self.CMD_LOW_LIMIT, channel=channel, p1=low_limit, is_query=False)
-        self._write_message(syntax)
+        self._set_cmd(self.CMD_LOW_LIMIT, channel=channel, setpoint_percentage=low_limit)
 
     def get_low_limit(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_LOW_LIMIT, channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return self._from_raw_setpoint(self._get_cmd(self.CMD_LOW_LIMIT, channel=channel).get_value_1())
 
     def set_trip_limits_mode(self, channel, mode):
-        # TODO: explicitly define the meanings of modes
-        self._check(channel=channel)
-        if mode in (0, 1, 2):  # 0 = sleep, 1 = limit, 2= band
-            syntax = self._build_msg(self.CMD_TRIPLE_LIMIT, channel=channel, p1=mode, is_query=False)
-            self._write_message(syntax)
-        else:
-            raise RuntimeError("Given mode {} invalid. Must be 0, 1 or 2.".format(mode))
+        if mode not in self.TRIP_LIMIT_MODES:
+            raise RuntimeError("Given mode {} invalid".format(mode))
+        self._set_cmd(self.CMD_TRIPLE_LIMIT, channel=channel, p1=mode)
 
     def get_trip_limits_mode(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg(self.CMD_TRIPLE_LIMIT, channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+        return int(self._get_cmd(self.CMD_TRIPLE_LIMIT, channel=channel).get_value_1())
 
-    def gas_set(self, channel, gas_set, setpoint):
-        # TODO: explicitly define the meanings of gas sets
-        self._check(channel=channel, raw_setpoint=setpoint)
-        if gas_set in range(1, 6):
-            syntax = self._build_msg(self.CMD_GAS_SET, channel=channel, p1=gas_set, p2=setpoint, is_query=False)
-            self._write_message(syntax)
-        else:
-            raise RuntimeError("Given gas set {} invalid. Must be 1..5.".format(gas_set))
+    def set_gas_set(self, channel, gas_set, setpoint):
+        if gas_set not in self.GAS_MENUS:
+            raise RuntimeError("Given gas set {} invalid".format(gas_set))
+        self._set_cmd(self.CMD_GAS_SET, channel=channel, p1=gas_set, setpoint_percentage=setpoint)
 
-    def get_setpoint_gas_set(self, channel, gas_set):
-        # TODO: giving parameter when is_query=True?
-        # TODO: explicitly define the meanings of gas sets
-        self._check(channel=channel)
-        if gas_set in range(1, 6):
-            syntax = self._build_msg(self.CMD_GAS_SET, channel=channel, p1=gas_set, is_query=True)
-            syntax.set_response_class(GrammarIntegerResponse)
-            return self._query_message(syntax)
+
+    #
+    # def get_gas_set(self, channel, gas_set):
+    #     # TODO: giving parameter when is_query=True?
+    #     if gas_set not in self.GAS_MENUS:
+    #         raise RuntimeError("Given gas set {} invalid".format(gas_set))
+    #     return self._from_raw_setpoint(self._get_cmd(self.CMD_GAS_SET, channel=channel).get_value_1())
 
     # def zero_adjust_pressure(self):
     #     cmd = "PZ"
@@ -414,11 +415,18 @@ class MKS647CDriver:
     #     valve = 0 # 0 = off all; 1..8 = channel valve
     #     return self.build_channel_grammar(cmd, channel=valve)
 
-    def get_channel_status(self, channel):
-        self._check(channel=channel)
-        syntax = self._build_msg("ST", channel=channel, is_query=True)
-        syntax.set_response_class(GrammarIntegerResponse)
-        return self._query_message(syntax)
+    def get_status_bit(self, channel, bit):
+        status_decimal = int(self._get_cmd(self.CMD_CHANNEL_STATUS, channel=channel).get_value_1())
+        if bit not in self.STATUS_BITS:
+            raise RuntimeError("Given bit {} invalid".format(bit))
+        return (status_decimal>>bit) & 1
+
+    def get_status_all(self, channel):
+        status_decimal = int(self._get_cmd(self.CMD_CHANNEL_STATUS, channel=channel).get_value_1())
+        status = []
+        for bit in self.STATUS_BITS:
+            status.append((status_decimal>>bit) & 1)
+        return status
 
     # def keyboard_disable(self):
     #     cmd = "KD"
