@@ -40,6 +40,7 @@ class GrammarChannelMessage(AbstractMessage):
     KEY_OPT_PARAMETER_3 = 'Optional:p3'
     KEY_OPT_ADDITIONAL_TERMINATOR = 'Optional:nl'
     KEY_OPT_CHANNEL = 'Optional:channel'
+    KEY_OPT_QUERY = 'Optional:query'
     KEY_WHITESPACE = 'whitespace'
     KEY_COMMAND = 'Command'
     KEY_CHANNEL = 'Channel'
@@ -62,7 +63,11 @@ class GrammarChannelMessage(AbstractMessage):
         whitespace = OptionalSyntax(self.KEY_OPT_WHITESPACE, WhitespaceToken(self.KEY_WHITESPACE))
         cmd = FixedLengthToken(self.KEY_COMMAND, 2)
         channel = OptionalSyntax(self.KEY_OPT_CHANNEL, IntegerToken(self.KEY_CHANNEL))
-        query = ConstantToken(self.KEY_QUERY, self.TOKEN_QUERY)
+
+        # Since the protocol grammar is really fucked up, sometimes we have to submit an 'R' token
+        # to read, and sometimes not. Hence this is optional...
+        query = OptionalSyntax(self.KEY_OPT_QUERY, ConstantToken(self.KEY_QUERY, self.TOKEN_QUERY))
+
         p1 = FloatToken(self.KEY_PARAMETER_1)
         p2 = OptionalSyntax(self.KEY_OPT_PARAMETER_2, FloatToken(self.KEY_PARAMETER_2))
         p3 = OptionalSyntax(self.KEY_OPT_PARAMETER_3, FloatToken(self.KEY_PARAMETER_3))
@@ -99,6 +104,7 @@ class DataChannelMessage:
     def __init__(self):
         self._p1, self._p2, self._p3 = None, None, None
         self._cmd, self._channel, self._query_write = None, None, None
+        self._opt_query = True
 
     def get_data(self):
         """
@@ -108,6 +114,7 @@ class DataChannelMessage:
         """
         return {
             GrammarChannelMessage.KEY_OPT_CHANNEL: self._channel is not None,
+            GrammarChannelMessage.KEY_OPT_QUERY: self._opt_query,
             GrammarChannelMessage.KEY_CHANNEL: self._channel,
             GrammarChannelMessage.KEY_COMMAND: self._cmd,
             GrammarChannelMessage.KEY_QUERY_WRITE: self._query_write,
@@ -123,6 +130,9 @@ class DataChannelMessage:
             GrammarChannelMessage.KEY_OPT_PARAMETER_3: self._p3 is not None,
             GrammarChannelMessage.KEY_PARAMETER_3: self._p3,
         }
+
+    def set_optional_query(self, enable):
+        self._opt_query = bool(enable)
 
     def set_command(self, command: str):
         if not len(command) == 2:
