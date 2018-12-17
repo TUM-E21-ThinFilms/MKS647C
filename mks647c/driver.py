@@ -31,19 +31,20 @@ class MKS647CDriver:
     #   Done: PR: check for pressure
     #   Done: PC: check for PCS (pressure control signal)
     #   Done: AZ c: zero adjust MFC, aber man bekommt ein Offset-Wert zurück
-    # PZ: zero adjust pressure, aber man bekommt ein Offset-Wert zurück
-    # ST c: check for status of a channel
-    # ID: check for identification
+    #   Done: PZ: zero adjust pressure, aber man bekommt ein Offset-Wert zurück
+    #   Done: ST c: check for status of a channel
+    #   Done: ID: check for identification
     #
     # CMD(s) mit R und Parameters geleichzeitig:
     # GP c s R: check for setpoint in gas set, wofür man auch s=gas_set eingeben muss
     #
     # CMD(s) wo die Channels auch null sein darf:
-    # ON c: open valve, wo c=0 entspricht ON ALL
-    # OF c: close valve, wo c=0 entspricht OFF ALL
+    #   Done: ON c: open valve, wo c=0 entspricht ON ALL
+    #   Done: OF c: close valve, wo c=0 entspricht OFF ALL
     #
     #
     CMD_ZERO_ADJUST = 'AZ'
+    CMD_ZERO_ADJUST_PRESSURE = 'PZ'
     CMD_GAS_MENU = 'GM'
     CMD_SETPOINT = 'FS'
     CMD_FLOW = 'FL'
@@ -57,11 +58,15 @@ class MKS647CDriver:
     CMD_LOW_LIMIT = 'LL'
     CMD_TRIPLE_LIMIT = 'TM'
     CMD_GAS_SET = 'GP'
-    CMD_CHANNEL_STATUS = 'ST'
+    CMD_STATUS = 'ST'
+    CMD_IDENTIFICATION = 'ID'
+    CMD_OPEN = 'ON'
+    CMD_CLOSE = 'OF'
 
     SETPOINT_MIN = 0
     SETPOINT_MAX = 1100
 
+    CHANNEL_ALL = 0
     CHANNEL_MIN = 1
     CHANNEL_MAX = 8
 
@@ -204,17 +209,24 @@ class MKS647CDriver:
         if not data.has_data():
             raise RuntimeError("Did not receive data from the device")
 
-    def _check(self, channel=None, raw_setpoint=None):
-        if channel is not None:
-            if channel not in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
-                raise RuntimeError("Given channel %s invalid." % str(channel))
-
+    def _check(self, channel=None, raw_setpoint=None, channel_all_allowed=False):
         if raw_setpoint is not None:
             if raw_setpoint not in range(self.SETPOINT_MIN, self.SETPOINT_MAX + 1):
                 raise RuntimeError("Given setpoint %s invalid." % str(raw_setpoint))
 
+        if channel is not None:
+            # Warning if refactoring: do not forget to consider this case too!
+            if channel_all_allowed is True:
+                if channel is self.CHANNEL_ALL:
+                    return
+
+            if channel not in range(self.CHANNEL_MIN, self.CHANNEL_MAX + 1):
+                raise RuntimeError("Given channel %s invalid." % str(channel))
+
+
     def _get_cmd(self, cmd, channel=None, enable_query_token=None):
         # works only for cmds for reading but without extra parameters p1..p3
+
         self._check(channel=channel)
         msg = self._build_msg(cmd, channel=channel, is_query=True, enable_query_token=enable_query_token)
         msg.set_response_class(GrammarIntegerResponse)
@@ -222,7 +234,7 @@ class MKS647CDriver:
         self._check_data_existing(response)
         return response
 
-    def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None):
+    def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None, channel_all_allowed=False):
         # practically no p3 will be transferred according to the manual
         if setpoint_percentage is not None:
             raw_setpoint = self._to_raw_setpoint(setpoint_percentage)
@@ -231,7 +243,7 @@ class MKS647CDriver:
                 p2 = raw_setpoint
             else:
                 p1 = raw_setpoint
-        self._check(channel=channel)
+        self._check(channel=channel, channel_all_allowed=channel_all_allowed)
         msg = self._build_msg(cmd, channel=channel, p1=p1, p2=p2, is_query=False)
         return self._write_message(msg)
 
@@ -368,10 +380,11 @@ class MKS647CDriver:
     #         raise RuntimeError("Given gas set {} invalid".format(gas_set))
     #     return self._from_raw_setpoint(self._get_cmd(self.CMD_GAS_SET, channel=channel).get_value_1())
 
-    # def zero_adjust_pressure(self):
-    #     cmd = "PZ"
-    #     return self.build_channel_grammar(cmd)
-    #
+    def zero_adjust_pressure(self):
+        # actually this should be a "set" command, but it works easier with a "get" cmd
+        response = self._get_cmd(self.CMD_ZERO_ADJUST_PRESSURE, channel=channel, enable_query_token=False)
+        return int(response.get_value_1())
+
     # def pressure_controller(self):
     #     cmd = "GT"
     #     controller_mode = 1 # 0..5
@@ -386,25 +399,24 @@ class MKS647CDriver:
     #     cmd = "PU"
     #     if query_write is "R"
     #     return self.build_channel_grammar(cmd, is_query=True)
-    #
-    # def open_valve(self):
-    #     cmd = "ON"
-    #     valve = 0 # 0 = on all; 1..8 = channel valve
-    #     return self.build_channel_grammar(cmd, channel=valve)
-    #
-    # def close_valve(self):
-    #     cmd = "OF"
-    #     valve = 0 # 0 = off all; 1..8 = channel valve
-    #     return self.build_channel_grammar(cmd, channel=valve)
 
+    def open(self, channel):
+        self._set_cmd(self.CMD_OPEN, channel=channel, channel_all_allowed=True)
+
+    def close(self, channel):
+        self._set_cmd(self.CMD_CLOSE, channel=channel, channel_all_allowed=True)
+
+
+    # TODO: check these two methods. I dont really know what the controller
+    # returns and how to interpret the result...
     def get_status_bit(self, channel, bit):
-        status_decimal = int(self._get_cmd(self.CMD_CHANNEL_STATUS, channel=channel).get_value_1())
+        status_decimal = int(self._get_cmd(self.CMD_STATUS, channel=channel, enable_query_token=False).get_value_1())
         if bit not in self.STATUS_BITS:
             raise RuntimeError("Given bit {} invalid".format(bit))
         return (status_decimal >> bit) & 1
 
     def get_status_all(self, channel):
-        status_decimal = int(self._get_cmd(self.CMD_CHANNEL_STATUS, channel=channel).get_value_1())
+        status_decimal = int(self._get_cmd(self.CMD_STATUS, channel=channel, enable_query_token=False).get_value_1())
         status = []
         for bit in self.STATUS_BITS:
             status.append((status_decimal >> bit) & 1)
@@ -426,9 +438,8 @@ class MKS647CDriver:
     #     cmd = "RE"
     #     return self.build_channel_grammar(cmd)
     #
-    # def identification(self): # check for identification
-    #     cmd = "ID"
-    #     return self.build_channel_grammar(cmd)
+    def identification(self): # check for identification
+        return self._get_cmd(self.CMD_IDENTIFICATION, channel=channel, enable_query_token=False).get_value_1()
 
 # MKS647CDriver.set_gas_range(MKS647CDriver.GAS_RANGE_5_SCCM)
 # gas_range = MKS647CDriver.get_gas_range()
