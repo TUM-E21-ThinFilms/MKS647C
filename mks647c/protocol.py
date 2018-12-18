@@ -60,8 +60,15 @@ class MKS647CProtocol:
                 raise ResponseError("Channel error: No Channel or unknown channel was specified")
             if response.get_error_code() == 1:
                 raise ResponseError("An unknown command was transmitted")
-            # TODO: RAN: implement error codes
-            # write error message depending on the error code
+            if response.get_error_code() == 2:
+                raise ResponseError("Syntax error, invalid command length")
+            if response.get_error_code() == 3:
+                raise ResponseError("Invalid expression given in message")
+            if response.get_error_code() == 4:
+                raise ResponseError("Invalid value given in message")
+            if response.get_error_code() == 5:
+                raise ResponseError("Autozero error. Channel was not switched off?")
+
             raise ResponseError("Received an unknown error from the device")
 
     def read_response(self, transport, msg: AbstractMessage):
