@@ -62,6 +62,10 @@ class MKS647CDriver:
     CMD_IDENTIFICATION = 'ID'
     CMD_OPEN = 'ON'
     CMD_CLOSE = 'OF'
+    CMD_KEYBOARD_DISABLE = 'KD'
+    CMD_KEYBOARD_ENABLE = 'KE'
+    CMD_ALL_DEFAULT = 'DF'
+    CMD_HARDWARE_RESET = 'RE'
 
     SETPOINT_MIN = 0
     SETPOINT_MAX = 1100
@@ -422,22 +426,18 @@ class MKS647CDriver:
             status.append((status_decimal >> bit) & 1)
         return status
 
-    # def keyboard_disable(self):
-    #     cmd = "KD"
-    #     return self.build_channel_grammar(cmd)
-    #
-    # def keyboard_enable(self):
-    #     cmd = "KE"
-    #     return self.build_channel_grammar(cmd)
-    #
-    # def parameter_default(self): # set all parameters to default
-    #     cmd = "DF"
-    #     return self.build_channel_grammar(cmd)
-    #
-    # def hardware_reset(self): # performe a hardware reset, like power up
-    #     cmd = "RE"
-    #     return self.build_channel_grammar(cmd)
-    #
+    def keyboard_disable(self):
+        self._set_cmd(self.CMD_KEYBOARD_DISABLE)
+
+    def keyboard_enable(self):
+        self._set_cmd(self.CMD_KEYBOARD_ENABLE)
+
+    def parameter_default(self): # set all parameters to default
+        self._set_cmd(self.CMD_ALL_DEFAULT)
+
+    def hardware_reset(self): # performe a hardware reset, like power up
+        self._set_cmd(self.CMD_HARDWARE_RESET)
+
     def identification(self): # check for identification
         return self._get_cmd(self.CMD_IDENTIFICATION, channel=channel, enable_query_token=False).get_value_1()
 
