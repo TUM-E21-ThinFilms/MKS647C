@@ -77,7 +77,7 @@ class GrammarChannelMessage(AbstractMessage):
         nl = OptionalSyntax(self.KEY_OPT_ADDITIONAL_TERMINATOR,
                             ConstantToken(self.KEY_ADDITIONAL_TERMINATOR, self.TOKEN_NL))
 
-        return ConcatSyntax(self.KEY_SYNTAX, [cmd, whitespace, channel, whitespace, query_write, cr, nl])
+        return ConcatSyntax(self.KEY_SYNTAX, [cmd, whitespace, channel, query_write, cr, nl])
 
     def get_syntax(self):
         return self._syntax
