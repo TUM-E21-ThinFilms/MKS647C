@@ -25,6 +25,7 @@ class InvalidArgumentError(RuntimeError):
 
 class MKS647CDriver:
     # TODO: ALEX: Folgende cmds folgenden nicht der grammatik:
+    # TODO: ALEX: Bislang sollten alle CMDs funktionieren bis auf GP c s R, wo man beiden Parameter und R hat
     #
     # Check-CMD(s) ohne R:
     #   Done: FL c: check for actual flow of a channel
@@ -66,6 +67,8 @@ class MKS647CDriver:
     CMD_KEYBOARD_ENABLE = 'KE'
     CMD_ALL_DEFAULT = 'DF'
     CMD_HARDWARE_RESET = 'RE'
+    CMD_PRESSURE_COMTROLLER = 'GT'
+    CMD_PRESSURE_UNIT = 'PU'
 
     SETPOINT_MIN = 0
     SETPOINT_MAX = 1100
@@ -163,6 +166,16 @@ class MKS647CDriver:
     STATUS_BITS = [STATUS_BIT_ON_OFF, STATUS_BIT_TRIP_LIMIT_LOW, STATUS_BIT_TRIP_LIMIT_HIGH, STATUS_BIT_OVERFLOW_IN,
                    STATUS_BIT_UNDERFLOW_IN, STATUS_BIT_OVERFLOW_OUT, STATUS_BIT_UNDERFLOW_OUT]
 
+    CONTROLLER_STD = 0 # standard
+    CONTROLLER_250 = 1
+    CONTROLLER_152 = 2
+    CONTROLLER_153 = 3
+    CONTROLLER_652 = 4
+    CONTROLLER_146 = 5
+
+    CONTROLLER_CODES = [CONTROLLER_STD, CONTROLLER_250, CONTROLLER_152, CONTROLLER_153, CONTROLLER_652,
+                        CONTROLLER_146]
+
     def __init__(self, transport: Serial, protocol: MKS647CProtocol = None):
 
         self._transport = transport
@@ -173,8 +186,8 @@ class MKS647CDriver:
         self._protocol = protocol
 
     def _build_msg(self, cmd, channel=None, p1=None, p2=None, p3=None, is_query=True, enable_query_token=None):
-        # works also for cmds that do not need any channel
-        # 'R' for request, however, is incompatible with parameters p1..p3
+        # Works also for cmds that do not need any channel
+        # 'R' for request, however, is yet incompatible with parameters p1..p3
         # TODO: adjust it for the cmd 'GP' or write a new method for it (also the syntax class etc)
 
         msg = GrammarChannelMessage()
@@ -239,7 +252,7 @@ class MKS647CDriver:
         return response
 
     def _set_cmd(self, cmd, channel=None, p1=None, p2=None, setpoint_percentage=None, channel_all_allowed=False):
-        # practically no p3 will be transferred according to the manual
+        # Practically no p3 will be transferred according to the manual
         if setpoint_percentage is not None:
             raw_setpoint = self._to_raw_setpoint(setpoint_percentage)
             self._check(raw_setpoint=raw_setpoint)
@@ -348,7 +361,7 @@ class MKS647CDriver:
     def zero_adjust(self, channel):
         # returns the voltage offset: -500 mV to 500 mV
 
-        # actually this should be a "set" command, but it works easier with a "get" cmd
+        # actually this should be a "set" command, but it works easier with a "get" cmd due to grammar
         response = self._get_cmd(self.CMD_ZERO_ADJUST, channel=channel, enable_query_token=False)
         return int(response.get_value_1())
 
@@ -389,20 +402,16 @@ class MKS647CDriver:
         response = self._get_cmd(self.CMD_ZERO_ADJUST_PRESSURE, channel=channel, enable_query_token=False)
         return int(response.get_value_1())
 
-    # def pressure_controller(self):
-    #     cmd = "GT"
-    #     controller_mode = 1 # 0..5
-    #     return self.build_channel_grammar(cmd, channel=controller_mode)
-    #
-    # def pressure_controller_check(self):
-    #     cmd = "GT"
-    #     if query_write is "R"
-    #     return self.build_channel_grammar(cmd, is_query=True)
-    #
-    # def pressure_unit_check(self):
-    #     cmd = "PU"
-    #     if query_write is "R"
-    #     return self.build_channel_grammar(cmd, is_query=True)
+    def set_pressure_controller(self, controller):
+        if controller not in self.CONTROLLER_CODES:
+            raise RuntimeError("Invalid controller code given")
+        self._set_cmd(self.CMD_PRESSURE_COMTROLLER, p1=controller)
+
+    def get_pressure_controller(self):
+        return int(self._get_cmd(self.CMD_PRESSURE_COMTROLLER).get_value_1())
+
+    def get_pressure_unit(self):
+        return int(self._get_cmd(self.CMD_PRESSURE_UNIT).get_value_1())
 
     def open(self, channel):
         self._set_cmd(self.CMD_OPEN, channel=channel, channel_all_allowed=True)
