@@ -51,20 +51,18 @@ class MKS647CProtocol:
     def parse_response(self, raw_response, cls):
         try:
             response = cls().parse(raw_response)
-
-            if response.has_error():
-                if response.get_error_code() == 0:
-                    raise ResponseError("Channel error: No Channel or unknown channel was specified")
-                if response.get_error_code() == 1:
-                    raise ResponseError("An unknown command was transmitted")
-                # TODO: RAN: implement error codes
-                # write error message depending on the error code
-                raise ResponseError("Received an unknown error from the device")
-
-
         except:
             # TODO: ALEX: do not catch all exceptions, only exceptions from parsing.
             raise ResponseError("Could not parse message")
+
+        if response.has_error():
+            if response.get_error_code() == 0:
+                raise ResponseError("Channel error: No Channel or unknown channel was specified")
+            if response.get_error_code() == 1:
+                raise ResponseError("An unknown command was transmitted")
+            # TODO: RAN: implement error codes
+            # write error message depending on the error code
+            raise ResponseError("Received an unknown error from the device")
 
     def read_response(self, transport, msg: AbstractMessage):
         response = transport.read_until(bytes(GrammarChannelMessage.TOKEN_NL, 'ascii'))
