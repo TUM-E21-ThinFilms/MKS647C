@@ -135,16 +135,10 @@ class DataChannelMessage:
         self._opt_query = bool(enable)
 
     def set_command(self, command: str):
-        if not len(command) == 2:
-            raise ArgumentInvalidError("Command must have a length of two")
-
-        self._cmd = command
+         self._cmd = command
 
     def set_channel(self, channel: int):
-        if not (1 <= channel <= 8):
-            raise ArgumentInvalidError("Channel must be between 1 and 8")
-
-        self._channel = channel
+         self._channel = channel
 
     def set_query(self):
         self._query_write = {GrammarChannelMessage.KEY_QUERY: True}
